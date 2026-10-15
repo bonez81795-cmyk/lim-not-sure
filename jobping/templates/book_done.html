@@ -1,0 +1,17 @@
+{% extends "base_public.html" %}
+{% block title %}You're booked · {{ biz.name }}{% endblock %}
+{% block content %}
+<h1>You're booked</h1>
+<p class="big-when">{{ when }}</p>
+<dl class="facts">
+  <dt>With</dt><dd>{{ biz.name }}</dd>
+  {% if job.name %}<dt>Name</dt><dd>{{ job.name }}</dd>{% endif %}
+  {% if job.address %}<dt>Address</dt><dd>{{ job.address }}</dd>{% endif %}
+  {% if job.problem %}<dt>What's going on</dt><dd>{{ job.problem }}</dd>{% endif %}
+</dl>
+{% if opted_out %}
+<p>You opted out of texts, so we won't send a reminder. Save this page or write the time down.</p>
+{% else %}
+<p>We'll text a reminder the day before. Need a different time? Reply <strong>CHANGE</strong> to our text.</p>
+{% endif %}
+{% endblock %}

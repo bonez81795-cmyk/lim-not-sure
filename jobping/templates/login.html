@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Log in · {{ app_name }}{% endblock %}
+{% block content %}
+<section class="panel narrow-panel">
+  <h1>Log in</h1>
+  <p class="tagline">Missed calls, texted back and booked.</p>
+  {% if error %}<p class="errors" role="alert">{{ error }}</p>{% endif %}
+  <form method="post" novalidate>
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <div class="field">
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" autocomplete="username" value="{{ email }}" required autofocus>
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+    </div>
+    <button class="btn primary" type="submit">Log in</button>
+  </form>
+  {% if config.ALLOW_SIGNUP %}<p class="hint">New here? <a href="{{ url_for('auth.signup') }}">Create an account</a>.</p>{% endif %}
+</section>
+{% endblock %}

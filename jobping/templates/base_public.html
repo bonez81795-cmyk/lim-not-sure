@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{% block title %}Book a time{% endblock %}</title>
+  <link rel="icon" href="data:,">
+  <link rel="preload" href="{{ url_for('static', filename='fonts/atkinson.woff') }}" as="font" type="font/woff" crossorigin>
+  <link rel="preload" href="{{ url_for('static', filename='fonts/bricolage.woff') }}" as="font" type="font/woff" crossorigin>
+  <script src="{{ url_for('static', filename='theme.js') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body class="public">
+  <header class="bar"><div class="wrap bar-in"><span class="brand">{{ biz.name }}</span></div></header>
+  <main id="main" class="wrap narrow">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="wrap narrow fine">
+    This is an automated booking page for {{ biz.name }}. Reply STOP to any of our texts to opt out.
+  </footer>
+</body>
+</html>

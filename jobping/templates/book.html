@@ -1,0 +1,58 @@
+{% extends "base_public.html" %}
+{% block title %}Book a time with {{ biz.name }}{% endblock %}
+{% block content %}
+{% if paused %}
+<h1>Online booking is paused</h1>
+<p>{{ biz.name }} isn't taking bookings through this page right now. Please call back, or reply to our text and we'll get to you.</p>
+{% elif job %}
+<h1>You're already booked</h1>
+<p class="big-when">{{ job_when }}</p>
+<p>{{ biz.name }} is expected then. Need a different time? Reply <strong>CHANGE</strong> to our text.</p>
+<p><a class="btn" href="{{ url_for('public.done', token=request.view_args.token) }}">See your booking</a></p>
+{% else %}
+<h1>Pick a time for {{ biz.name }}</h1>
+{% if biz.services %}<p class="muted">{{ biz.services }}</p>{% endif %}
+{% if errors %}
+<div class="errors" role="alert"><p>Fix this and try again:</p><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>
+{% endif %}
+{% if groups %}
+<form method="post" novalidate>
+  <fieldset class="slots">
+    <legend>Open times</legend>
+    {% for label, times in groups %}
+    <div class="day" role="group" aria-label="{{ label }}">
+      <h2>{{ label }}</h2>
+      <div class="chips">
+        {% for value, text in times %}
+        <span class="chip">
+          <input type="radio" name="slot" id="s-{{ value }}" value="{{ value }}"{% if form.slot == value %} checked{% endif %}>
+          <label for="s-{{ value }}">{{ text }}</label>
+        </span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </fieldset>
+
+  <div class="field">
+    <label for="name">Your name</label>
+    <input id="name" name="name" value="{{ form.name }}" maxlength="80" autocomplete="name" required>
+  </div>
+  <div class="field">
+    <label for="address">Address for the visit</label>
+    <input id="address" name="address" value="{{ form.address }}" maxlength="200" autocomplete="street-address" placeholder="Street, city" required>
+  </div>
+  <div class="field">
+    <label for="problem">What's going on?</label>
+    <textarea id="problem" name="problem" rows="3" maxlength="500">{{ form.problem }}</textarea>
+    <p class="hint">No prices are quoted here. {{ biz.name }} will confirm the details.</p>
+  </div>
+  <div class="notice danger">{{ icon('warning') }}<p><strong>Emergency?</strong> If water is flooding the home or you smell gas, leave and call 911. Don't wait for a visit.</p></div>
+  <p class="hint">By booking, you agree to get texts from {{ biz.name }} about this visit, including a reminder and a review request. Message and data rates may apply. Reply STOP anytime.</p>
+  <button class="btn primary wide" type="submit">Book this time</button>
+</form>
+{% else %}
+<p>There are no open times in the next few days. {{ biz.name }} has been told and will text you.</p>
+{% endif %}
+{% endif %}
+{% endblock %}

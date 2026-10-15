@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Missed calls · {{ app_name }}{% endblock %}
+{% block content %}
+<p class="back"><a href="{{ url_for('owner.dashboard') }}">{{ icon('back') }}Back to the board</a></p>
+<h1>Missed calls, last {{ days }} days</h1>
+<p class="hint">This is how many calls your phone missed, and what happened to those callers. It counts only calls that came through your business line.</p>
+<section class="panel">
+  <ol class="report">
+    <li><strong>{{ r.missed }}</strong> missed call{{ '' if r.missed == 1 else 's' }} from <strong>{{ r.callers }}</strong> different caller{{ '' if r.callers == 1 else 's' }}</li>
+    <li><strong>{{ r.texted }}</strong> got a text-back</li>
+    <li><strong>{{ r.replied }}</strong> wrote back</li>
+    <li><strong>{{ r.booked }}</strong> booked a job</li>
+  </ol>
+  <p class="fine">{% if days == 30 %}<a href="{{ url_for('owner.report', days=7) }}">Show 7 days</a>{% else %}<a href="{{ url_for('owner.report') }}">Show 30 days</a>{% endif %}</p>
+</section>
+{% if r.missed == 0 %}<p class="empty">No missed calls yet. Once your business line is connected, every call you miss is counted here, even in "Tell me only" mode.</p>{% endif %}
+{% endblock %}

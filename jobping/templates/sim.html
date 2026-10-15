@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Simulator · {{ app_name }}{% endblock %}
+{% block content %}
+<h1>Simulator</h1>
+<p class="muted">Pretend to be a customer. Nothing here sends a real text or rings a real phone.</p>
+
+<section class="panel" id="sim" data-feed="{{ url_for('sim.feed') }}" data-phone="{{ phone }}">
+  <form method="get" action="{{ url_for('sim.page') }}" class="inline-form">
+    <div class="field grow">
+      <label for="phone">Pretend customer's number</label>
+      <input id="phone" name="phone" type="tel" value="{{ phone_pretty }}">
+    </div>
+    <button class="btn" type="submit">Switch</button>
+  </form>
+
+  <div class="controls">
+    <form method="post" action="{{ url_for('sim.missed_call') }}" data-sim>
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="phone" value="{{ phone }}">
+      <button class="btn primary" type="submit">Call, nobody answers</button>
+    </form>
+    <form method="post" action="{{ url_for('sim.answered_call') }}" data-sim>
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="phone" value="{{ phone }}">
+      <button class="btn" type="submit">Call, you answer</button>
+    </form>
+  </div>
+
+  <div class="phones">
+    <section class="phone" aria-labelledby="cust-h">
+      <h2 id="cust-h" class="phone-head">Customer's phone <span class="muted">{{ phone_pretty }}</span></h2>
+      <div class="phone-body" id="cust-feed" role="log" aria-live="polite"><p class="empty">No texts yet. Start with a missed call.</p></div>
+      <form method="post" action="{{ url_for('sim.text') }}" class="phone-send" data-sim>
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="phone" value="{{ phone }}">
+        <label class="sr" for="sim-body">Text as the customer</label>
+        <input id="sim-body" name="body" autocomplete="off" placeholder="Reply as the customer" maxlength="300">
+        <button class="btn primary" type="submit">Send</button>
+      </form>
+      <p class="phone-link"><a id="book-link" href="#" hidden>Open the booking page from the text</a></p>
+    </section>
+    <section class="phone" aria-labelledby="own-h">
+      <h2 id="own-h" class="phone-head">Your phone <span class="muted">alerts</span></h2>
+      <div class="phone-body" id="own-feed" role="log" aria-live="polite"><p class="empty">Alerts to you show up here.</p></div>
+    </section>
+  </div>
+  <p id="sim-error" class="errors" role="alert" hidden></p>
+
+  <div class="clock">
+    <p>Clock: <output id="sim-now">…</output></p>
+    <div class="controls">
+      {% for minutes, label in skips.items() %}
+      <form method="post" action="{{ url_for('sim.skip') }}" data-sim>
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="phone" value="{{ phone }}">
+        <input type="hidden" name="minutes" value="{{ minutes }}">
+        <button class="btn" type="submit">Jump {{ label }}</button>
+      </form>
+      {% endfor %}
+      <form method="post" action="{{ url_for('sim.run') }}" data-sim>
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="phone" value="{{ phone }}">
+        <button class="btn" type="submit">Send due reminders now</button>
+      </form>
+      <form method="post" action="{{ url_for('sim.reset_clock') }}" data-sim>
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="phone" value="{{ phone }}">
+        <button class="btn" type="submit">Back to real time</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>A good first test</h2>
+  <ol>
+    <li>Press <strong>Call, nobody answers</strong>. The customer gets a text.</li>
+    <li>Reply as the customer: <em>kitchen faucet is leaking, 123 Main St</em>. They get three open times.</li>
+    <li>Reply <em>1</em>. The job is booked and you get an alert.</li>
+    <li>Press <strong>Jump 1 day</strong>. The customer gets a reminder.</li>
+    <li>Try <em>my basement is flooding</em> from a new number. The assistant stops and alerts you.</li>
+    <li>Try <em>STOP</em>. The customer gets no more texts.</li>
+  </ol>
+</section>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='sim.js') }}" defer></script>{% endblock %}

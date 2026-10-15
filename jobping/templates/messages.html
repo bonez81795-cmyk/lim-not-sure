@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}What customers read · {{ app_name }}{% endblock %}
+{% block content %}
+<h1>What your customers read</h1>
+<p class="hint">These are the only texts the assistant sends, using your business name. It never quotes a price and never offers a time outside the hours you set in Setup. Example times are shown. <a href="{{ url_for('owner.setup') }}">Back to Setup</a></p>
+<ol class="panel msgs">
+{% for label, body in items %}
+  <li>
+    <p class="label"><strong>{{ label }}</strong></p>
+    <p class="msg-body">{{ body }}</p>
+  </li>
+{% endfor %}
+</ol>
+{% endblock %}

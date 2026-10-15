@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Setup · {{ app_name }}{% endblock %}
+{% block content %}
+<h1>Setup</h1>
+<p class="hint">Not sure what customers will see? <a href="{{ url_for('owner.messages') }}">Read every text the assistant sends</a>.</p>
+{% if errors %}
+<div class="errors" role="alert"><p>Fix this and save again:</p><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>
+{% endif %}
+
+<form method="post" action="{{ url_for('owner.setup') }}" novalidate>
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+
+  <fieldset class="panel">
+    <legend>Your business</legend>
+    <div class="field">
+      <label for="name">Business name</label>
+      <input id="name" name="name" value="{{ form.name }}" maxlength="80" required>
+      <p class="hint">Customers see this in every text.</p>
+    </div>
+    <div class="field">
+      <label for="owner_cell">Your cell phone</label>
+      <input id="owner_cell" name="owner_cell" type="tel" value="{{ form.owner_cell|phone }}" required>
+      <p class="hint">Calls to your business line ring here. Job alerts are texted here.</p>
+    </div>
+    <div class="field">
+      <label for="timezone">Time zone</label>
+      <select id="timezone" name="timezone">
+        {% for value, label in timezones %}<option value="{{ value }}"{% if value == form.timezone %} selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="services">What you do</label>
+      <input id="services" name="services" value="{{ form.services }}" maxlength="300" placeholder="Leaks, drains, water heaters, toilets">
+    </div>
+    <div class="field">
+      <label for="service_area">Where you work</label>
+      <input id="service_area" name="service_area" value="{{ form.service_area }}" maxlength="200" placeholder="Macomb County">
+    </div>
+  </fieldset>
+
+  <fieldset class="panel">
+    <legend>When customers can book</legend>
+    <p class="hint">The assistant only offers times inside these hours, and never double-books.</p>
+    <table class="hours">
+      <caption class="sr">Open hours by day</caption>
+      <thead><tr><th scope="col">Open on</th><th scope="col">From</th><th scope="col">To</th></tr></thead>
+      <tbody>
+      {% for r in rows %}
+      <tr>
+        <th scope="row"><label class="check"><input type="checkbox" name="open_{{ r.day }}" value="1"{% if r.open %} checked{% endif %}> {{ r.name }}</label></th>
+        <td><input type="time" name="start_{{ r.day }}" value="{{ r.start }}" aria-label="{{ r.name }} opens"></td>
+        <td><input type="time" name="end_{{ r.day }}" value="{{ r.end }}" aria-label="{{ r.name }} closes"></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <div class="row3">
+      <div class="field">
+        <label for="job_minutes">Time per visit</label>
+        <select id="job_minutes" name="job_minutes">
+          {% for m in job_lengths %}<option value="{{ m }}"{% if m == form.job_minutes %} selected{% endif %}>{{ (m ~ ' minutes') if m < 60 else ((m // 60) ~ ' hour' ~ ('' if m == 60 else 's') ~ (' 30 min' if m % 60 else '')) }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="lead_hours">Notice needed (hours)</label>
+        <input id="lead_hours" name="lead_hours" type="number" min="0" max="72" value="{{ form.lead_hours }}">
+      </div>
+      <div class="field">
+        <label for="horizon_days">Book up to (days ahead)</label>
+        <input id="horizon_days" name="horizon_days" type="number" min="1" max="30" value="{{ form.horizon_days }}">
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset class="panel">
+    <legend>Texting</legend>
+    <p>Texting number: <strong>{{ form.text_number|phone or 'not set yet' }}</strong>
+      <span class="muted">{{ '(set by whoever runs this app)' if live else '(made up, for the simulator)' }}</span></p>
+    <div class="field">
+      <label for="review_url">Google review link</label>
+      <input id="review_url" name="review_url" type="url" value="{{ form.review_url }}" maxlength="300" placeholder="https://g.page/r/...">
+      <p class="hint">Two hours after you mark a job done, the customer gets one text asking for a review. Leave blank to skip.</p>
+    </div>
+    <div class="field">
+      <p><strong>How should the assistant work?</strong></p>
+      <label class="check big"><input type="radio" name="mode" value="notify"{% if form.mode == 'notify' %} checked{% endif %}>
+        <span><strong>Tell me only</strong><br><span class="hint">Nothing is ever sent to a customer. You get a text with the caller's number and call or text them yourself. Good for the first week.</span></span></label>
+      <label class="check big"><input type="radio" name="mode" value="approve"{% if form.mode == 'approve' %} checked{% endif %}>
+        <span><strong>Ask me first</strong><br><span class="hint">You tap once to send each text-back, and once to approve each booking. Nothing reaches a customer or your schedule without your tap.</span></span></label>
+      <label class="check big"><input type="radio" name="mode" value="auto"{% if form.mode == 'auto' %} checked{% endif %}>
+        <span><strong>Fully automatic</strong><br><span class="hint">Texts back within a minute and books open times by itself.</span></span></label>
+    </div>
+    <label class="check big">
+      <input type="checkbox" name="skip_known" value="1"{% if form.skip_known %} checked{% endif %}>
+      <span><strong>Leave my past customers to me</strong><br><span class="hint">If someone you have already worked for calls and you miss it, you get an alert to call them back. They never get a robot text.</span></span>
+    </label>
+    <label class="check big">
+      <input type="checkbox" name="assistant_on" value="1"{% if form.assistant_on %} checked{% endif %}>
+      <span><strong>Assistant is on</strong><br><span class="hint">Texts customers back after a missed call. Turn off to stop all automatic texts.</span></span>
+    </label>
+  </fieldset>
+
+  <button class="btn primary" type="submit">Save</button>
+</form>
+
+<section class="panel">
+  <h2>Check that it works</h2>
+  <form method="post" action="{{ url_for('owner.test_alert') }}" class="inline-form">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <button class="btn" type="submit">Send a test alert to my cell</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Your calendar</h2>
+  <p class="hint">Add this private link to Google Calendar ("From URL"), Apple Calendar or Outlook, and booked jobs show up on your phone. Anyone with the link can see job details, so don't post it.</p>
+  <div class="field">
+    <label for="cal">Calendar link</label>
+    <input id="cal" value="{{ calendar_url }}" readonly>
+  </div>
+  <form method="post" action="{{ url_for('owner.new_calendar_link') }}" data-confirm="Make a new link? The old one stops working.">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <button class="btn" type="submit">Make a new link</button>
+  </form>
+</section>
+{% endblock %}

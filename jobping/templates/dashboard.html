@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Board · {{ app_name }}{% endblock %}
+{% set labels = {
+  'new': 'New', 'asked': 'Texted', 'offered': 'Times sent', 'booked': 'Booked',
+  'owner_handling': "You're on it", 'closed': 'Closed', 'needs_owner': 'Needs you',
+  'awaiting_ok': 'Your OK', 'awaiting_booking': 'Approve job'
+} %}
+{% set glyphs = {
+  'new': 'text', 'asked': 'text', 'offered': 'clock', 'booked': 'booked',
+  'owner_handling': 'user', 'closed': 'done', 'needs_owner': 'bell', 'awaiting_ok': 'bell', 'awaiting_booking': 'booked'
+} %}
+{% block content %}
+{% if not g.biz.assistant_on %}
+<div class="notice warn">{{ icon('warning') }}<p><strong>The assistant is paused.</strong> Missed calls get no text back. <a href="{{ url_for('owner.setup') }}">Turn it on in Setup</a>.</p></div>
+{% endif %}
+
+<h1 class="lede">
+  {% if needs %}<span class="hl">{{ needs }} customer{{ '' if needs == 1 else 's' }} {{ 'needs' if needs == 1 else 'need' }} you.</span>
+  {% else %}<span class="hl">Nothing needs you right now.</span>{% endif %}
+  {% if today_jobs %}{{ today_jobs }} job{{ '' if today_jobs == 1 else 's' }} on the schedule today.{% else %}No jobs on the schedule today.{% endif %}
+</h1>
+
+{% if g.biz.busy_until and g.biz.busy_until > now_iso %}
+<div class="notice warn">{{ icon('clock') }}<p><strong>You're booked up.</strong> Customers aren't offered times before {{ g.biz.busy_until|when }}.
+<form method="post" action="{{ url_for('owner.busy') }}" class="inline-form"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="until" value="clear"><button class="btn" type="submit">Open up again</button></form></p></div>
+{% else %}
+<form method="post" action="{{ url_for('owner.busy') }}" class="inline-form busy-form">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <span class="muted">Slammed?</span>
+  <button class="btn" name="until" value="today" type="submit">No new bookings today</button>
+  <button class="btn" name="until" value="tomorrow" type="submit">Or tomorrow</button>
+</form>
+{% endif %}
+
+<section class="funnel" aria-label="Last 7 days">
+  <ol>
+    <li><span class="f-ic">{{ icon('missed') }}</span><span class="f-n">{{ stats.missed }}</span><span class="f-l">Missed calls</span></li>
+    <li><span class="f-ic">{{ icon('text') }}</span><span class="f-n">{{ stats.texted }}</span><span class="f-l">Texted back</span></li>
+    <li><span class="f-ic">{{ icon('booked') }}</span><span class="f-n">{{ stats.booked }}</span><span class="f-l">Jobs booked</span></li>
+  </ol>
+  <p class="fine">Last 7 days. <a href="{{ url_for('owner.report') }}">See the 30-day missed-call count</a>.</p>
+</section>
+
+<nav class="filters" aria-label="Filter customers">
+  {% for key, label in filters %}
+  <a href="{{ url_for('owner.dashboard', show=key) }}"{% if key == show %} aria-current="page"{% endif %}>{{ label }} <span class="count">{{ counts[key] }}</span></a>
+  {% endfor %}
+</nav>
+
+{% if tickets %}
+<ul class="tickets">
+  {% for t in tickets %}
+  {% set urgent = t.reason == 'emergency' and t.state == 'needs_owner' %}
+  <li class="ticket state-{{ t.state }}{% if t.reason == 'emergency' %} urgent{% endif %}">
+    <a href="{{ url_for('owner.ticket', conv_id=t.id) }}">
+      <span class="stub">{{ icon('warning' if urgent else glyphs[t.state]) }}<span>{{ 'Urgent' if urgent else labels[t.state] }}</span></span>
+      <span class="ticket-body">
+        <span class="ticket-who"><strong>{{ t.name or (t.phone|phone) }}</strong>{% if t.name %} <span class="muted">{{ t.phone|phone }}</span>{% endif %}</span>
+        <span class="ticket-problem">{{ t.problem or ('Replied STOP. No more texts will be sent.' if t.opted_out else ('No details were given.' if t.state == 'closed' else 'No details yet. Waiting for a reply.')) }}</span>
+        <span class="ticket-meta">
+          <span class="meta-item">{{ icon('clock') }}{{ t.updated_at|ago }}</span>
+          {% if t.next_job %}<span class="meta-item">{{ icon('booked') }}Job {{ t.next_job|when }}</span>{% endif %}
+          {% if t.opted_out %}<span class="meta-item">Opted out of texts</span>{% endif %}
+        </span>
+      </span>
+      <span class="ticket-go">{{ icon('next') }}</span>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+{% elif counts.all %}
+<p class="empty">Nothing in this list.</p>
+{% else %}
+<section class="panel empty-state">
+  <span class="empty-ic">{{ icon('missed') }}</span>
+  <h2>No customers yet</h2>
+  <p>When someone calls your business line and nobody picks up, they show up here and get a text within a minute.</p>
+  {% if simulator_on %}<p><a class="btn primary" href="{{ url_for('sim.page') }}">Try a fake missed call</a></p>{% endif %}
+</section>
+{% endif %}
+{% endblock %}

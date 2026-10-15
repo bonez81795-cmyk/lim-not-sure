@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% set labels = {
+  'new': 'New', 'asked': 'Waiting for a reply', 'offered': 'Times sent', 'booked': 'Booked',
+  'owner_handling': "You're handling this", 'closed': 'Closed', 'needs_owner': 'Needs you',
+  'awaiting_ok': 'Your OK needed', 'awaiting_booking': 'Approve this job'
+} %}
+{% set reasons = {
+  'emergency': 'They used words that sound like an emergency, so the assistant stopped and alerted you.',
+  'no_slots': 'No open times were left to offer.',
+  'stuck': "The assistant couldn't understand the replies.",
+  'owner_request': 'They asked to change their time.'
+} %}
+{% set kinds = {
+  'first_text': 'Assistant', 'offer': 'Assistant', 'handoff': 'Assistant', 'confirm': 'Assistant',
+  'reminder': 'Assistant', 'review': 'Assistant', 'help': 'Assistant', 'ack': 'Assistant', 'manual': 'You'
+} %}
+{% set glyphs = {
+  'new': 'text', 'asked': 'text', 'offered': 'clock', 'booked': 'booked',
+  'owner_handling': 'user', 'closed': 'done', 'needs_owner': 'bell', 'awaiting_ok': 'bell', 'awaiting_booking': 'booked'
+} %}
+{% block title %}{{ conv.cust_name or (conv.cust_phone|phone) }} · {{ app_name }}{% endblock %}
+{% block content %}
+<p class="back"><a href="{{ url_for('owner.dashboard') }}">{{ icon('back') }}Back to the board</a></p>
+
+{% set emergency = conv.state == 'needs_owner' and conv.reason == 'emergency' %}
+<header class="ticket-head state-{{ conv.state }}{% if emergency %} emergency{% endif %}">
+  <div>
+    <h1>{{ conv.cust_name or (conv.cust_phone|phone) }}</h1>
+    {% if conv.cust_name or conv.cust_opted_out %}<p class="muted">{% if conv.cust_name %}{{ conv.cust_phone|phone }}{% endif %}{% if conv.cust_name and conv.cust_opted_out %} · {% endif %}{% if conv.cust_opted_out %}Opted out of texts{% endif %}</p>{% endif %}
+  </div>
+  <span class="stub-pill">{{ icon('warning' if emergency else glyphs[conv.state]) }}{{ 'Urgent' if emergency else labels[conv.state] }}</span>
+</header>
+
+<div class="call-row">
+  <a class="btn primary" href="tel:{{ conv.cust_phone }}">{{ icon('phone') }}Call them</a>
+  {% if not conv.cust_opted_out %}<a class="btn" href="#body">{{ icon('text') }}Text them</a>{% endif %}
+</div>
+
+{% if conv.state == 'awaiting_ok' %}
+<section class="panel approve">
+  <h2>This caller missed you. Send them the text-back?</h2>
+  <p class="hint">They will read: "Hi, this is the automated assistant for {{ g.biz.name }}. Sorry we missed your call. Reply with what you need and your address, or pick a time..."</p>
+  <div class="actions">
+    <form method="post" action="{{ url_for('owner.approve_text', conv_id=conv.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn primary" type="submit">Send the text</button></form>
+    <form method="post" action="{{ url_for('owner.skip_text', conv_id=conv.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn" type="submit">Don't text them</button></form>
+  </div>
+</section>
+{% elif conv.state == 'awaiting_booking' %}
+<section class="panel approve">
+  <h2>Approve this job?</h2>
+  <p>{{ pending_when }}{% if pending.name %} for {{ pending.name }}{% endif %}{% if pending.address %} at {{ pending.address }}{% endif %}.</p>
+  {% if pending.problem %}<p class="muted">{{ pending.problem }}</p>{% endif %}
+  <p class="hint">Nothing is on your schedule yet. If you approve, the customer gets a confirmation text. If you decline, they are offered the next open times.</p>
+  <div class="actions">
+    <form method="post" action="{{ url_for('owner.approve_booking', conv_id=conv.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn primary" type="submit">Approve</button></form>
+    <form method="post" action="{{ url_for('owner.decline_booking', conv_id=conv.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn" type="submit">I can't make that time</button></form>
+  </div>
+</section>
+{% endif %}
+
+{% if conv.state == 'needs_owner' and conv.reason %}
+<div class="notice {{ 'danger' if conv.reason == 'emergency' else 'warn' }}">{{ icon('warning') }}<p>{{ reasons[conv.reason] }} Call or text them.</p></div>
+{% endif %}
+{% if conv.problem %}<p class="problem"><span class="muted">What they said:</span> {{ conv.problem }}</p>{% endif %}
+
+<div class="split">
+  <section aria-labelledby="thread-h">
+    <h2 id="thread-h">Texts</h2>
+    {% if messages %}
+    <ol class="thread">
+      {% for m in messages %}
+      <li class="msg {{ 'in' if m.direction == 'in' else ('alert' if m.kind == 'alert' else 'out') }}{% if m.kind == 'manual' %} manual{% endif %}">
+        <p class="who">
+          {% if m.direction == 'in' %}{{ conv.cust_name or 'Customer' }}
+          {% elif m.kind == 'alert' %}Alert sent to you
+          {% else %}{{ kinds.get(m.kind, 'Assistant') }}{% endif %}
+          <span class="when">{{ m.created_at|ago }}</span>
+        </p>
+        <p class="said">{{ m.body }}</p>
+        {% if m.status.startswith('blocked:') %}<p class="note">Not sent: {{ m.status.split(':', 1)[1].replace('_', ' ') }}</p>
+        {% elif m.status.startswith('failed') %}<p class="note">Failed to send</p>{% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    <p class="empty">No texts yet.</p>
+    {% endif %}
+
+    <h3>Text them yourself</h3>
+    {% if conv.cust_opted_out %}
+    <p class="hint">They replied STOP, so texting is off for this customer. Call them instead.</p>
+    {% else %}
+    <form method="post" action="{{ url_for('owner.send', conv_id=conv.id) }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <div class="field">
+        <label for="body">Message</label>
+        <textarea id="body" name="body" rows="3" maxlength="320" required></textarea>
+        <p class="hint">Sending a text pauses the assistant for this customer, so you won't talk over each other.</p>
+      </div>
+      <button class="btn primary" type="submit">Send text</button>
+    </form>
+    {% endif %}
+  </section>
+
+  <div class="side">
+    <section class="panel panel-job">
+      <h2>Job</h2>
+      {% for j in jobs %}
+      <div class="job job-{{ j.status }}">
+        <p class="job-when">{{ j.starts_at|when }} <span class="pill {{ j.status }}">{{ j.status|capitalize }}</span></p>
+        {% if j.name %}<p>{{ j.name }}</p>{% endif %}
+        {% if j.address %}<p>{{ j.address }}</p>{% else %}<p class="muted">No address saved. Check what they wrote, or ask when you call.</p>{% endif %}
+        {% if j.problem %}<p class="muted">{{ j.problem }}</p>{% endif %}
+        <p class="fine">Booked by {{ 'the booking page' if j.source == 'web' else 'text message' }}</p>
+        {% if j.status == 'booked' %}
+        <div class="actions">
+          <form method="post" action="{{ url_for('owner.job_done', conv_id=conv.id, job_id=j.id) }}">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+            <button class="btn" type="submit">Mark done</button>
+          </form>
+          <form method="post" action="{{ url_for('owner.job_cancel', conv_id=conv.id, job_id=j.id) }}" data-confirm="Cancel this job and free the time?">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+            <label class="check"><input type="checkbox" name="notify" value="1"> Text the customer</label>
+            <button class="btn danger" type="submit">Cancel job</button>
+          </form>
+        </div>
+        {% endif %}
+      </div>
+      {% else %}
+      <p class="muted">Nothing booked yet.</p>
+      {% endfor %}
+    </section>
+
+    <section class="panel">
+      <h2>Assistant</h2>
+      {% if conv.state in ('needs_owner', 'owner_handling') %}
+      <p class="muted">{{ "You're handling this customer. The assistant stays quiet and only alerts you when they text." if conv.state == 'owner_handling' else "The assistant stopped and is waiting for you." }}</p>
+      {% else %}
+      <p class="muted">The assistant is handling this customer.</p>
+      {% endif %}
+      <div class="actions">
+        {% if conv.state != 'owner_handling' %}
+        <form method="post" action="{{ url_for('owner.take_over', conv_id=conv.id) }}">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <button class="btn" type="submit">Take over</button>
+        </form>
+        {% endif %}
+        {% if conv.state in ('needs_owner', 'owner_handling') %}
+        <form method="post" action="{{ url_for('owner.resolve', conv_id=conv.id) }}">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <button class="btn" type="submit">Hand back to the assistant</button>
+        </form>
+        {% endif %}
+      </div>
+    </section>
+
+    {% if calls %}
+    <section class="panel">
+      <h2>Calls</h2>
+      <ul class="plain">
+        {% for c in calls %}<li>{{ 'Missed call' if c.status == 'missed' else 'You answered' }} <span class="muted">{{ c.created_at|ago }}</span></li>{% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
