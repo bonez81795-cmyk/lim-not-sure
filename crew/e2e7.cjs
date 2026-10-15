@@ -115,6 +115,7 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok(['pricing', 'operations', 'outreach', 'launch', 'design', 'build'].every((k) => ts.filter((t) => t.stage === k).length === 1), 'a clean verdict changes nothing');
   ok(/CONSISTENCY CHECK, run before Test 3/.test(fp) && /VERDICT: CONSISTENT/.test(fp), 'the final package is told what the check found');
   ok((await goal(page)).status === 'ready', 'the goal is ready');
+  ok(await page.evaluate(() => document.querySelector('#autoCancel').hidden), 'a finished relay has nothing to cancel');
   ok(ts.filter((t) => t.kind !== 'final').every((t) => t.status === 'review' && t.pipe && t.auto), 'nothing is approved: every step waits behind the final package');
   ok(await page.evaluate(() => document.querySelectorAll('#gateList .gate-item.final').length === 1 && document.querySelectorAll('#gateList .gate-item').length === 4), 'the gate shows only the final package (3 older drafts + 1)');
   ok(await page.evaluate(() => [...document.querySelectorAll('#relay .rs')].every((b) => b.classList.contains('done'))), 'every step in the relay is ticked');
@@ -214,6 +215,54 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   await waitStatus(page, /^Done\./);
   ts = await tasks(page); L = await log(page);
   ok(L.filter((x) => x.kind === 'check').length === 1 && ts.filter((t) => t.stage === 'pricing').length === 2 && ts.filter((t) => t.stage === 'launch').length === 2, 'Resume does not repeat the check or make a fix twice');
+  await ctx.close();
+
+  // ================= Cancel autopilot while it runs: two clicks, then it is abandoned for good
+  ({ page, ctx, errors } = await open(browser));
+  await page.evaluate(() => { window.__delay = 200; });
+  await start(page);
+  await page.waitForFunction(() => window.__log.length >= 4, null, { timeout: 20000 });
+  ok(await page.evaluate(() => !document.querySelector('#autoCancel').hidden && /Cancel autopilot/.test(document.querySelector('#autoCancel').textContent)), 'Cancel autopilot is offered while it runs');
+  await page.click('#autoCancel');
+  await page.waitForTimeout(150);
+  ok(/Confirm cancel/.test(await page.evaluate(() => document.querySelector('#autoCancel').textContent)) && (await goal(page)).status === 'running', 'the first click only asks to confirm and cancels nothing');
+  await page.click('#autoCancel');
+  await waitStatus(page, /^Autopilot cancelled/);
+  ts = await tasks(page);
+  ok((await goal(page)).status === 'cancelled', 'the goal is marked cancelled');
+  ok(!ts.some((t) => t.status === 'working') && !ts.some((t) => t.pipe && !t.output), 'nothing is left running and no empty unfinished step is left on the board');
+  ok(ts.some((t) => t.stage === 'concept' && t.output) && ts.some((t) => t.stage === 'research' && t.output), 'steps that already finished are kept');
+  ok(await page.evaluate(() => document.querySelector('#autoResume').hidden && document.querySelector('#autoCancel').hidden && document.querySelector('#autoStop').hidden && document.querySelector('#relay').hidden), 'Resume, Stop, Cancel and the relay strip are all gone');
+  ok(await page.evaluate(() => !document.querySelector('#briefBtn').disabled && !document.querySelector('#goal').disabled), 'the manager can be briefed again');
+  const calls = await page.evaluate(() => window.__log.length);
+  await page.waitForTimeout(800);
+  ok((await page.evaluate(() => window.__log.length)) === calls, 'nothing keeps running in the background after a cancel');
+  await page.evaluate(() => { window.__delay = 30; });
+  await start(page, 'Launch a website for a bakery');
+  await waitStatus(page, /^Done\./);
+  ts = await tasks(page);
+  ok(ts.some((t) => t.kind === 'final' && t.status === 'review' && /bakery/.test(t.goalText)), 'a new goal runs normally after a cancel');
+  ok(errors.length === 0, 'no page errors after a cancel');
+  await ctx.close();
+
+  // ================= the confirm step times out, and Cancel also works on a stopped run
+  ({ page, ctx, errors } = await open(browser));
+  await page.evaluate(() => { window.__delay = 250; });
+  await start(page);
+  await page.waitForFunction(() => window.__log.length >= 4, null, { timeout: 20000 });
+  await page.click('#autoStop');
+  await waitStatus(page, /^Autopilot stopped at step/);
+  await page.waitForFunction(() => !document.querySelector('#autoResume').hidden, null, { timeout: 3000 });
+  ok(await page.evaluate(() => !document.querySelector('#autoCancel').hidden), 'Cancel is still offered next to Resume when autopilot is stopped');
+  await page.click('#autoCancel');
+  await page.waitForTimeout(150);
+  ok(await page.evaluate(() => /Confirm cancel/.test(document.querySelector('#autoCancel').textContent)), 'it asks to confirm');
+  await page.waitForFunction(() => /^Cancel autopilot$/.test(document.querySelector('#autoCancel').textContent), null, { timeout: 9000 });
+  ok((await goal(page)).status === 'stopped', 'if you do not confirm, it goes back to normal and nothing is cancelled');
+  await page.click('#autoCancel'); await page.click('#autoCancel');
+  await waitStatus(page, /^Autopilot cancelled/);
+  ok((await goal(page)).status === 'cancelled' && await page.evaluate(() => document.querySelector('#autoResume').hidden && document.querySelector('#autoCancel').hidden), 'cancelling a stopped run removes Resume for good');
+  ok(!(await tasks(page)).some((t) => t.pipe && !t.output), 'its empty unfinished steps are removed');
   await ctx.close();
 
   // ================= no limit: it keeps tweaking and re-testing until a majority says yes

@@ -199,7 +199,7 @@ html.lenis, html.lenis body { height: auto; }
 .stage-status { position: relative; z-index: 2; margin: 0; padding: 0 14px 4px; font: 400 10.5px/1.4 var(--mono); color: var(--core-hot); text-shadow: 0 0 8px rgba(155,109,255,.6); }
 .stage-status:empty { display: none; }
 .vctl { position: relative; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 4px 14px; }
-.vbtns { display: flex; gap: 6px; }
+.vbtns { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; max-width: 100%; }
 .phases { list-style: none; margin: 0 auto; padding: 0; display: flex; flex-wrap: wrap; gap: 3px 20px; font: 400 12px/1 var(--display); letter-spacing: .22em; text-transform: uppercase; color: var(--dim); }
 .phases li { position: relative; padding-bottom: 5px; transition: color .3s; }
 .phases li::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--line-2); transform-origin: left; }
@@ -576,6 +576,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
           <button class="btn small" type="button" id="vFocus" aria-pressed="false">Focus</button>
           <button class="btn small" type="button" id="autoStop" data-act="auto-stop" hidden>Stop autopilot</button>
           <button class="btn small primary" type="button" id="autoResume" data-act="auto-resume" hidden>Resume autopilot</button>
+          <button class="btn small danger" type="button" id="autoCancel" data-act="auto-cancel" hidden title="Abandon this run for good. Steps that already finished are kept on the board.">Cancel autopilot</button>
         </div>
         <ol class="phases" id="phases" aria-label="Where the crew is">
           <li data-ph="brief">Brief</li>
@@ -1150,6 +1151,13 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     $("#autoStop").hidden = !S.auto;
     $("#autoStop").disabled = !!(S.auto && S.auto.stopping);
     $("#autoResume").hidden = !(canRun() && pendingAuto());
+    // Cancel is offered while the relay runs and while it is stopped and could still be resumed. It needs a second click to confirm.
+    const canCancel = canRun() && (!!S.auto || !!pendingAuto());
+    if (!canCancel) S.cancelArm = false;
+    const cb = $("#autoCancel");
+    cb.hidden = !canCancel;
+    cb.disabled = !!(S.auto && S.auto.cancel);
+    cb.textContent = S.auto && S.auto.cancel ? "Cancelling…" : S.cancelArm ? "Confirm cancel" : "Cancel autopilot";
     if (S.auto) autoSay();
 
     // gate
@@ -1209,7 +1217,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     const g = S.goals.filter((y) => y.mode === "pipeline").sort((p, q) => (q.createdAt || "").localeCompare(p.createdAt || ""))[0];
     const stages = g && Array.isArray(g.stages) ? g.stages : [];
     const fin = g ? latestOf(g.id, "final") : null;
-    if (!g || !stages.length || (fin && fin.status === "approved")) { el.hidden = true; return; }
+    if (!g || !stages.length || g.status === "cancelled" || (fin && fin.status === "approved")) { el.hidden = true; return; }
     el.hidden = false;
     put(el, ...stages.map((s, i) => {
       const t = latestOf(g.id, s.key), n = S.tasks.filter((x) => x.goalId === g.id && x.stage === s.key).length;
@@ -1873,8 +1881,25 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     if (!g || !Array.isArray(g.stages) || !g.stages.length) return null;
     const fin = latestOf(g.id, "final");
     if (fin && (fin.status === "review" || fin.status === "approved" || fin.status === "working")) return null;
-    if (g.status === "failed") return null;
+    if (g.status === "failed" || g.status === "cancelled") return null;
     return g.id;
+  }
+  // Cancel: abandon the run for good. Steps that already have a draft are kept on the board; empty unfinished steps are removed.
+  function autoCancel() {
+    const A = S.auto;
+    if (!A || A.cancel) return;
+    A.cancel = true;
+    autoStop();
+    scheduleRender();
+  }
+  async function cancelRelay(gid) {
+    const ok = await write(() => S.db.doc("goals/" + gid).update({ status: "cancelled", cancelledAt: nowIso(), updatedAt: nowIso() }), "Couldn't cancel autopilot. Try again.");
+    if (!ok) return;
+    for (const x of S.tasks.filter((y) => y.goalId === gid && y.pipe && !y.output && y.status !== "approved")) {
+      await S.db.doc("tasks/" + x.id).delete().catch(() => {});
+    }
+    stageStatus("Autopilot cancelled. Steps that were already finished are kept on the board. Give the manager a new goal to start again.");
+    scheduleRender();
   }
   function autoSay() {
     const A = S.auto;
@@ -2059,6 +2084,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
       }
       done = FINISHED(latestOf(goalId, "final"));
 
+      if (A.stopping && A.cancel) { S.auto = null; await cancelRelay(goalId); return; }
       if (A.stopping) { await mark("stopped"); stageStatus("Autopilot stopped at step " + (A.step + 1) + " of " + N + ". Press Resume autopilot to carry on."); return; }
       if (A.fatal) { await mark("stopped"); stageStatus(sampleCopy({ code: A.fatal }) + " Press Resume autopilot once that's fixed."); return; }
       if (A.stuck) {
@@ -2563,6 +2589,13 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
         break;
       }
       case "auto-stop": autoStop(); break;
+      case "auto-cancel": {
+        if (!S.cancelArm) { S.cancelArm = true; scheduleRender(); clearTimeout(S.cancelT); S.cancelT = setTimeout(() => { S.cancelArm = false; scheduleRender(); }, 6000); break; }
+        S.cancelArm = false; clearTimeout(S.cancelT);
+        if (S.auto) autoCancel(); else { const gid = pendingAuto(); if (gid) cancelRelay(gid); }
+        scheduleRender();
+        break;
+      }
       case "auto-resume": { const gid = pendingAuto(); if (gid) autoRunGoal(gid); break; }
       case "reopen": await write(() => S.db.doc("tasks/" + id).update({ status: "review", decision: null, updatedAt: nowIso() }), "Couldn't move it back. Try again."); break;
       case "del-task": S.confirm = "del-task"; renderReview(); break;
