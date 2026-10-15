@@ -10,7 +10,8 @@ function fakeClaude() {
   const buyers = (n, yes) => Array.from({ length: n }, (_, i) => ({ name: 'Buyer' + i, who: 'a local customer', buy: i < yes, reason: 'reason ' + i, objection: i < yes ? 'small doubt' : 'the price is too high', flip: 'a lower price' }));
   const sample = Object.assign(async (prompt, opts) => {
     let kind = 'make', label = '';
-    if (/running a buyer panel/.test(prompt)) kind = 'batch';
+    if (/THE WORK TO CHECK: /.test(prompt)) { kind = 'review'; label = (/THE WORK TO CHECK: (.+?), by /.exec(prompt) || [0, '?'])[1]; }
+    else if (/running a buyer panel/.test(prompt)) kind = 'batch';
     else if (/Do not recount/.test(prompt)) kind = 'digest';
     else if (/YOUR STEP: Consistency check/.test(prompt)) { kind = 'check'; label = 'Consistency check'; }
     else if (/doing the quality check/.test(prompt)) kind = 'qa';
@@ -32,6 +33,7 @@ function fakeClaude() {
         entry.round = round; entry.yes = [y0, y1, y2][b];
         text = JSON.stringify(buyers(10, entry.yes));
       } else if (kind === 'digest') text = 'Main reasons for no: the price is too high (most buyers).\nWhat would change their minds: a lower price.\nThree changes: lower the price, say what is included, add a guarantee.';
+      else if (kind === 'review') { const r = (window.__mgr || {})[label]; text = r && r.n > 0 ? (r.n--, 'REDO: put the price in the headline; say who it is for') : 'PASS: it does what was asked and matches the concept.'; }
       else if (kind === 'check') text = window.__checkReply || 'VERDICT: CONSISTENT';
       else if (kind === 'qa') text = 'Quality check: nothing is broken. One confusing label. Run the form test for real.';
       else {
@@ -117,11 +119,15 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok((await goal(page)).status === 'ready', 'the goal is ready');
   ok(await page.evaluate(() => document.querySelector('#autoCancel').hidden), 'a finished relay has nothing to cancel');
   ok(await page.evaluate(() => document.querySelector('#autoFinish').hidden), 'a finished relay has nothing to finish');
-  ok(ts.filter((t) => t.kind !== 'final').every((t) => t.status === 'review' && t.pipe && t.auto), 'nothing is approved: every step waits behind the final package');
-  ok(await page.evaluate(() => document.querySelectorAll('#gateList .gate-item.final').length === 1 && document.querySelectorAll('#gateList .gate-item').length === 4), 'the gate shows only the final package (3 older drafts + 1)');
+  ok(ts.filter((t) => t.kind !== 'final').every((t) => t.status === 'approved' && t.passedBy === 'a0' && t.decision === 'manager' && !t.decidedBy), 'the manager (not you) passed every one of the 12 steps');
+  const RV = L.filter((x) => x.kind === 'review');
+  ok(RV.length === 8 && RV.every((x) => x.who === 'Nova'), 'the manager checked each of the 8 written steps before handing it on (' + RV.length + ' checks)');
+  ok(L.every((x, i) => x.kind !== 'make' || i === 0 || !L.slice(i + 1).some((y) => y.kind === 'make') || L.slice(i + 1).find((y) => y.kind !== 'batch' && y.kind !== 'digest' && y.kind !== 'qa').kind === 'review'), 'each written step is followed by the manager\'s check before anyone else works');
+  ok(await page.evaluate(() => document.querySelectorAll('#gateList .gate-item').length === 1 && document.querySelectorAll('#gateList .gate-item.final').length === 1), 'the only thing waiting on you is the final package');
+  ok(await page.evaluate(() => !document.querySelector('#board .col.review') && document.querySelectorAll('#board .col.final .card').length === 1 && document.querySelectorAll('#board .col .card [data-act="review"].primary').length === 1), 'there is no Needs your OK column, and only the final draft has a Review button');
   ok(await page.evaluate(() => [...document.querySelectorAll('#relay .rs')].every((b) => b.classList.contains('done'))), 'every step in the relay is ticked');
   ok(await page.evaluate(() => /30\/30/.test(document.querySelector('#relay .rs.test i').textContent) && document.querySelectorAll('#relay .rs.test').length === 3), 'the three test chips show their votes');
-  ok(await page.evaluate(() => document.querySelectorAll('#board .col.review .held-row').length === 12), 'the 12 steps sit in the closed group under "Needs your OK"');
+  ok(await page.evaluate(() => document.querySelectorAll('#board .col.shared .card .pkg.mgr').length >= 12), 'the 12 steps sit under Passed by the manager, each marked as passed');
   await page.screenshot({ path: 'shot-relay-done.png' });
   // open a test and look at the vote
   await page.click('#relay .rs.test');
@@ -131,16 +137,16 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   await page.click('#reviewDlg [data-act="close"]');
   // the build can be copied as a website file
   const buildId = ts.find((t) => t.stage === 'build').id;
-  await page.click('#board .held-group summary');
-  await page.click('#board .held-row[data-id="' + buildId + '"]'); await page.waitForSelector('#reviewDlg[open]');
+  await page.click('#board .card button.t[data-id="' + buildId + '"]'); await page.waitForSelector('#reviewDlg[open]');
   ok(await page.evaluate(() => !!document.querySelector('#reviewBody [data-act="copy-code"]')), 'the Build step has a Copy website file button');
+  ok(await page.evaluate(() => !document.querySelector('#reviewBody [data-act="approve"]') && !document.querySelector('#reviewBody [data-act="send-back"]') && /Passed by the manager/.test(document.querySelector('#reviewBody .pill').textContent) && /Nova passed it on/.test(document.querySelector('#reviewBody').textContent)), 'a step has no Approve or Send back for you; it says the manager passed it');
   await page.click('#reviewDlg [data-act="close"]');
   // one approval
   await page.click('#gateList .gate-item.final button'); await page.waitForSelector('#reviewDlg[open]');
-  ok(await page.evaluate(() => /12 steps|11 drafts|drafts/.test(document.querySelector('#rvAlso').textContent) && document.querySelectorAll('#reviewBody .built-from li').length === 12), 'the package lists the 12 steps it was built from');
+  ok(await page.evaluate(() => document.querySelectorAll('#reviewBody .built-from li').length === 12 && !!document.querySelector('#reviewBody [data-act="approve"]')), 'the package lists the 12 steps it was built from, and you can approve it');
   await page.click('#reviewBody [data-act="approve"]'); await page.waitForTimeout(400);
   ts = await tasks(page);
-  ok(ts.every((t) => t.status === 'approved' && t.decidedBy === 'u1'), 'one click approved the package and every step');
+  ok(ts.every((t) => t.status === 'approved') && ts.find((t) => t.kind === 'final').decidedBy === 'u1', 'one click approved the package');
   ok(await page.evaluate(() => document.querySelector('#relay').hidden), 'the relay strip hides once the package is approved');
   ok(errors.length === 0, 'no page errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await ctx.close();
@@ -163,7 +169,7 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok(/Test 1: try 1 got 10 of 30 yes; try 2 got 14 of 30 yes; try 3 got 22 of 30 yes \(passed\)/.test(L.find((x) => x.label === 'Design').prompt) && /Changes the crew made after buyer tests/.test(L.find((x) => x.label === 'Design').prompt) && /tweak 3/.test(L.find((x) => x.label === 'Design').prompt), 'later roles are told how the vote went and what was changed');
   ok(conceptTries[2].changes && /lowered the price/.test(conceptTries[2].changes), 'what changed is saved with each tweak');
   ok(await page.evaluate(() => /22\/30/.test([...document.querySelectorAll('#relay .rs.test i')][0].textContent) && /try 3/.test(document.querySelector('#relay .rs').textContent + document.querySelector('#relay li .rs i').textContent)), 'the relay shows the vote that passed and the number of tries');
-  ok(await page.evaluate(() => document.querySelectorAll('#board .col.review .held-row').length === 12 + 4), 'old tries are kept in the supporting group too (16 steps)');
+  ok(await page.evaluate(() => document.querySelectorAll('#board .col.shared .held-row').length === 4), 'the 4 older tries are kept, folded under the newest version');
   ok(await page.evaluate(() => (document.querySelector('#stageStatus').textContent.match(/\d+ tests in all/) || [''])[0]) === '5 tests in all' || true, 'done message counts the tests');
   await ctx.close();
 
@@ -290,7 +296,7 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok(/did not win them \(best result 8 of 30 yes\)/.test(await status(page)), 'the done message says so too: ' + (await status(page)).slice(0, 140));
   ok(await page.evaluate(() => { const t = [...document.querySelectorAll('#relay .rs.test')]; return t.length === 3 && t.every((b) => b.classList.contains('skip')) && /best 8\/30/.test(t[0].textContent) && /skipped/.test(t[1].textContent) && document.querySelectorAll('#relay .rs.fail').length === 0; }), 'the three test chips show as skipped, with the best vote');
   ok(await page.evaluate(() => document.querySelector('#autoFinish').hidden && document.querySelectorAll('#gateList .gate-item.final').length === 1), 'the gate shows the final package, and Finish now is gone');
-  ok(await page.evaluate(() => { const g = document.querySelector('#board .held-group summary'); return !!g && /covered by the package/.test(g.textContent); }), 'the steps are tucked away behind the package');
+  ok(await page.evaluate(() => { const g = document.querySelector('#board .col.shared .held-group summary'); return !!g && /older version/.test(g.textContent); }), 'the old failed tries fold away under the newest one');
   ok(errors.length === 0, 'no page errors after Finish now' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await ctx.close();
 
@@ -315,7 +321,7 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ts = await tasks(page); L = await log(page);
   const g1 = ts.filter((t) => t.stage === 'test1');
   ok(g1.length === 9 && g1.find((t) => t.round === 9).votes.pass && g1.filter((t) => t.votes && !t.votes.pass).length === 8, 'it never gives up: 8 failed tests, 8 tweaks, the 9th passes');
-  ok(L.filter((x) => x.label === 'Concept').length === 9, 'the concept owner tweaked it 8 times');
+  ok(L.filter((x) => x.label === 'Concept' && x.kind === 'make').length === 9, 'the concept owner tweaked it 8 times');
   const fd = L.findIndex((x) => x.label === 'Design'), lc = L.map((x) => x.label).lastIndexOf('Concept');
   ok(fd > lc, 'Design only started once Test 1 passed');
   ok((await goal(page)).status !== 'stuck' && ts.find((t) => t.kind === 'final').status === 'review', 'and the relay carried on to the final package');
@@ -332,8 +338,7 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok((await goal(page)).status === 'stopped' && !(await tasks(page)).some((t) => t.status === 'working'), 'Stop leaves nothing running');
   await page.waitForFunction(() => !document.querySelector('#autoResume').hidden, null, { timeout: 3000 }).catch(() => {});
   ok(await page.evaluate(() => !document.querySelector('#autoResume').hidden && document.querySelector('#autoStop').hidden), 'Resume appears and Stop hides');
-  ok(await page.evaluate(() => { const cards = [...document.querySelectorAll('#board .col.review .card')]; const g = document.querySelector('#board .held-group summary'); return cards.every((c) => !/Concept|Research|Test 1/.test(c.textContent)) && !!g && /nothing to review until the final package arrives/.test(g.textContent); }), 'while stopped and before the final package, the steps are tucked into one closed group and none ask for your OK');
-  ok(await page.evaluate(() => { const n = +document.querySelector('#board .col.review .col-h .n').textContent; return n === document.querySelectorAll('#board .col.review .card').length; }), 'the Needs your OK count only counts what you can review');
+  ok(await page.evaluate(() => document.querySelectorAll('#gateList .gate-item').length === 0 && +document.querySelector('#sGate').textContent === 0), 'while stopped, nothing waits on you');
   await page.evaluate(() => { window.__delay = 30; });
   await page.click('#autoResume');
   await waitStatus(page, /^Done\./);
@@ -348,7 +353,7 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   await start(page);
   await waitStatus(page, /^Done\./);
   L = await log(page);
-  ok(L.filter((x) => x.label === 'Research').length === 2, 'a failed step is retried once');
+  ok(L.filter((x) => x.label === 'Research' && x.kind === 'make').length === 2, 'a failed step is retried once');
   await ctx.close();
   ({ page, ctx, errors } = await open(browser));
   await page.evaluate(() => { window.__fail.Concept = { n: 9, code: 'not_granted' }; });
@@ -375,16 +380,34 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok(/Add a Tester agent first/.test(await status(page)) && (await page.evaluate(() => Object.keys(window.__store.goals).length)) === 0, 'with no Tester it says to add one and starts nothing');
   await ctx.close();
 
-  // ================= Autopilot off keeps the manual way
+  // ================= the manager sends a step back: it is fixed once and passed on, and you never see it
   ({ page, ctx, errors } = await open(browser));
-  await page.uncheck('#autoSw');
-  await page.evaluate(() => { window.__plan = [{ agentId: 'a1', title: 'Manual task A', brief: 'x' }, { agentId: 'a2', title: 'Manual task B', brief: 'y' }]; });
-  await page.fill('#goal', 'Do it by hand'); await page.click('#briefBtn');
-  await waitStatus(page, /Run them from the board/);
-  await page.waitForTimeout(400);
-  ts = await tasks(page);
-  ok(ts.length === 2 && ts.every((t) => t.status === 'planned' && !t.auto && !t.pipe), 'with Autopilot off the manager plans tasks and nothing runs');
-  ok((await page.evaluate(() => window.__log.length)) === 0, 'no agent was called');
+  await page.evaluate(() => { window.__mgr = { Design: { n: 1 } }; });
+  await start(page);
+  await waitStatus(page, /^Done\./, 90000);
+  ts = await tasks(page); L = await log(page);
+  const ds = ts.filter((t) => t.stage === 'design').sort((a, b) => a.round - b.round);
+  ok(ds.length === 2 && ds[0].decision === 'redo' && /price in the headline/.test(ds[0].redoNote) && ds[1].revises === ds[0].id && ds[1].passedBy === 'a0', 'the manager sent Design back once, Dash fixed it, and the fix was passed on');
+  const fixP = L.filter((x) => x.label === 'Design' && x.kind === 'make')[1].prompt;
+  ok(/YOUR MANAGER SENT THIS STEP BACK/.test(fixP) && /price in the headline/.test(fixP) && /Output of Design try 1/.test(fixP), 'the fix is given the first version and the manager\'s notes');
+  ok(L.filter((x) => x.kind === 'review' && x.label === 'Design').length === 1, 'the fix is not checked again, so it cannot loop');
+  const bp = L.find((x) => x.label === 'Build' && x.kind === 'make').prompt;
+  ok(/Output of Design try 2/.test(bp) && !/Output of Design try 1/.test(bp), 'the next bot builds on the fixed design, not the one sent back');
+  ok(await page.evaluate(() => document.querySelectorAll('#gateList .gate-item').length === 1), 'still only the final package waits on you');
+  await ctx.close();
+
+  // ================= a direct task is checked by the manager too, and never waits on you
+  ({ page, ctx, errors } = await open(browser));
+  await page.evaluate(() => { window.__mgr = { 'Cold email sequence': { n: 1 } }; });
+  const dId = await page.evaluate(() => Object.entries(window.__store.tasks).find(([, t]) => t.title === 'Cold email sequence')[0]);
+  await page.click('#board [data-act="run"][data-id="' + dId + '"]');
+  await page.waitForFunction((id) => window.__store.tasks[id].status === 'approved', dId, { timeout: 20000 });
+  const dt = await page.evaluate((id) => window.__store.tasks[id], dId);
+  L = await log(page);
+  ok(dt.passedBy === 'a0' && dt.mgrRedone && dt.noteBy === 'manager', 'the manager sent the direct task back once, then passed it on');
+  ok(L.filter((x) => x.kind === 'make').length === 2 && /Your manager sent it back/.test(L.filter((x) => x.kind === 'make')[1].prompt), 'the agent redid it with the manager\'s note');
+  ok(await page.evaluate(() => !document.querySelector('#autoLbl') || document.querySelector('#autoLbl').hidden), 'there is no switch back to approving every task by hand');
+  ok(errors.length === 0, 'no page errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await ctx.close();
 
   // ================= phone

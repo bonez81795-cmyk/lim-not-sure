@@ -29,14 +29,14 @@ const nodes = (page) => page.evaluate(() => window.__V.nodes.map((x) => ({ id: x
 
   // ---------- desktop, 5 agents, library stand-ins
   let { page, ctx, errors } = await open(browser, { n: 5 });
-  ok((await txt(page, '#sAgents')) === '5' && (await txt(page, '#sMotion')) === '4' && (await txt(page, '#sGate')) === '3' && (await txt(page, '#sOk')) === '4', 'telemetry bar counts: agents 5, in motion 4, waiting 3, approved ' + await txt(page, '#sOk'));
+  ok((await txt(page, '#sAgents')) === '5' && (await txt(page, '#sMotion')) === '4' && (await txt(page, '#sGate')) === '0' && (await txt(page, '#sOk')) === '0', 'telemetry bar counts: agents 5, in motion 4, waiting 0 (only a final package waits on you), final packages approved ' + await txt(page, '#sOk'));
   ok((await txt(page, '#liveTxt')) === 'Live' && !(await page.$eval('#livePill', (e) => e.classList.contains('off'))), 'LIVE pill shows Live');
   ok(/^\d\d:\d\d:\d\d$/.test(await txt(page, '#clock')), 'clock ticks: ' + await txt(page, '#clock'));
-  ok((await txt(page, '#gateN')) === '3' && (await page.$$('.gate-item')).length === 3, 'gate shows 3 waiting items');
-  ok((await page.$$eval('.gate-stats dd', (e) => e.map((x) => x.textContent))).join(',') === '2,1,4,1', 'gate stat cells planned/working/approved/sent back: ' + (await page.$$eval('.gate-stats dd', (e) => e.map((x) => x.textContent))).join(','));
+  ok((await txt(page, '#gateN')) === '0' && (await page.$$('.gate-item')).length === 0 && !!(await page.$('.gate-empty')), 'gate shows nothing waiting: old direct drafts do not need your OK');
+  ok((await page.$$eval('.gate-stats dd', (e) => e.map((x) => x.textContent))).join(',') === '2,1,0,1', 'gate stat cells planned/working/manager passed/redoing: ' + (await page.$$eval('.gate-stats dd', (e) => e.map((x) => x.textContent))).join(','));
   ok((await txt(page, '#mDrafts')) === '8' && (await txt(page, '#mRate')) === '80%' && /^\d+s$/.test(await txt(page, '#mTime')), 'stage numbers: drafts ' + await txt(page, '#mDrafts') + ', approval ' + await txt(page, '#mRate') + ', avg ' + await txt(page, '#mTime'));
   ok((await page.$eval('#phases li.on', (e) => e.dataset.ph)) === 'draft', 'phase tracker is on Draft while an agent is working');
-  ok((await page.$$('.tk-set')).length === 2 && /Waiting on you 3/.test(await txt(page, '.tk-set')), 'ticker has two sets and the live counts');
+  ok((await page.$$('.tk-set')).length === 2 && /Waiting on you 0/.test(await txt(page, '.tk-set')), 'ticker has two sets and the live counts');
   ok((await txt(page, '#pulseN')) === '24' && /24 events/.test(await txt(page, '#sparkCap')), 'timeline counts 24 events: ' + await txt(page, '#sparkCap'));
   ok((await page.$$('#spark path')).length >= 24 + 3, 'timeline draws a marker per event: ' + (await page.$$('#spark path')).length + ' paths');
   ok((await page.$eval('#spark', (s) => s.getAttribute('viewBox'))).split(' ')[2] > 280, 'timeline sizes to its width: ' + await page.$eval('#spark', (s) => s.getAttribute('viewBox')));
@@ -95,10 +95,10 @@ const nodes = (page) => page.evaluate(() => window.__V.nodes.map((x) => ({ id: x
   await page.waitForTimeout(1800);
   ok((await txt(page, '#termTxt')) === 'Welcome email for new signups' && (await txt(page, '#termWho')) === 'Luma' && (await txt(page, '#termTag')) === 'finished', 'terminal shows the newest event: ' + await txt(page, '#termWho') + ' ' + await txt(page, '#termTag') + ' / ' + await txt(page, '#termTxt'));
   // data change flows through
-  await page.evaluate(() => window.__db.doc('tasks/t9').update({ status: 'review', finishedAt: new Date().toISOString() }));
-  await page.waitForFunction(() => document.getElementById('gateN').textContent === '4', null, { timeout: 4000 });
+  await page.evaluate(() => window.__db.doc('tasks/t9').update({ status: 'review', kind: 'final', finishedAt: new Date().toISOString() }));
+  await page.waitForFunction(() => document.getElementById('gateN').textContent === '1', null, { timeout: 4000 });
   ok((await page.$eval('#phases li.on', (e) => e.dataset.ph)) === 'review', 'phase tracker moves to Review when nothing is working');
-  ok((await txt(page, '#sGate')) === '4' && /Waiting on you 4/.test(await txt(page, '.tk-set')), 'counters and ticker follow a change');
+  ok((await txt(page, '#sGate')) === '1' && /Waiting on you 1/.test(await txt(page, '.tk-set')), 'counters and ticker follow a change');
   // tabs live inside the page frame now
   await page.click('.tab[data-tab="knowledge"]');
   ok(await page.$eval('#knowledgeTab', (e) => e.classList.contains('active') && !!e.closest('.app')), 'Knowledge tab opens inside the padded page');
@@ -119,7 +119,7 @@ const nodes = (page) => page.evaluate(() => window.__V.nodes.map((x) => ({ id: x
   const vis = await page.$$eval('.top, .gate, .brief, .vctl, .board-wrap, .pulse, .ticker', (els) => els.map((e) => getComputedStyle(e).opacity));
   ok(vis.every((o) => o === '1'), 'without the libraries every panel is fully visible');
   ok((await txt(page, '#vt')) === 'The Crew' && (await page.$$('#vt .ch')).length === 0, 'title stays plain text');
-  ok((await txt(page, '#sGate')) === '3' && px > 0, 'numbers and vortex work without the libraries');
+  ok((await txt(page, '#sAgents')) === '5' && px > 0, 'numbers and vortex work without the libraries');
   console.log(errors.length ? 'PAGE ERRORS:\n' + errors.join('\n') : 'no page errors (no libraries)');
   if (errors.length) failed++;
   await ctx.close();

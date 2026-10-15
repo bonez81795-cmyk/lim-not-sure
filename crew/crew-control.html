@@ -249,6 +249,8 @@ html.lenis, html.lenis body { height: auto; }
 .votebar .y { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #1f9d6e, var(--ok)); }
 .votebar .need { position: absolute; top: -2px; bottom: -2px; width: 2px; background: #fff; }
 .vote-cap { margin: 4px 0 0; font: 400 11px/1.4 var(--mono); color: var(--muted); }
+.pkg.mgr { color: #9df0cb; border-color: #2c6b52; background: rgba(61,220,151,.08); }
+.pkg.redo { color: #ffd59a; border-color: #5c4413; background: rgba(255,179,71,.08); }
 .pkg.vote.pass { color: #9df0cb; border-color: #2c6b52; background: rgba(61,220,151,.1); }
 .pkg.vote.fail { color: #ffc2d1; border-color: #8a3a52; background: rgba(255,95,162,.1); }
 .pkg { display: inline-block; white-space: nowrap; font: 500 9px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ice); border: 1px solid #2f5f92; border-radius: 4px; padding: 3px 5px; background: rgba(124,192,255,.08); }
@@ -315,10 +317,10 @@ html.lenis, html.lenis body { height: auto; }
 .col-h { display: flex; justify-content: space-between; align-items: center; padding: 2px 2px 8px; border-bottom: 1px solid var(--line); }
 .col-h b { font: 400 16px/1 var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); }
 .col-h .n { font: 500 10px/1.4 var(--mono); color: var(--muted); border: 1px solid var(--line-2); border-radius: 999px; padding: 0 9px; }
-.col.review { border-color: #4a3613; }
-.col.review .col-h b { color: var(--gate); }
+.col.final { border-color: #4a3613; }
+.col.final .col-h b { color: var(--gate); }
 .col.working .col-h b { color: var(--core-hot); }
-.col.approved .col-h b { color: var(--ok); }
+.col.shared .col-h b { color: var(--ok); }
 .card {
   border: 1px solid var(--line-2); border-left: 3px solid var(--c, var(--core)); border-radius: 8px;
   background: rgba(16,9,40,.82); padding: 8px; display: grid; gap: 5px; min-width: 0; transition: transform .2s, box-shadow .2s, border-color .2s;
@@ -548,7 +550,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
       <div class="stage-top">
         <div>
           <h2 class="vt" id="vt" aria-label="The Crew">The <b>Crew</b></h2>
-          <p class="sub">Your AI crew drafts the work. Nothing is used until you approve it.</p>
+          <p class="sub">Your crew works as one chain. Each bot hands its work to the next, the manager checks and passes every step, and you approve only the final package.</p>
         </div>
         <dl class="mini" aria-label="Crew numbers">
           <div><dt>Drafts / 24h</dt><dd id="mDrafts">0</dd></div>
@@ -593,7 +595,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
       <form class="brief" id="briefForm" autocomplete="off">
         <label for="goal" class="sr">Goal for the crew</label>
         <input id="goal" name="goal" maxlength="600" placeholder="Give the crew a goal, like: get 3 plumbing shops to try JobPing free">
-        <label class="auto-sw" id="autoLbl" title="On: the crew runs every planned task by itself and the manager hands you one final package to approve. Off: you run each task yourself.">
+        <label class="auto-sw" id="autoLbl" hidden title="On: the crew runs every planned task by itself and the manager hands you one final package to approve. Off: you run each task yourself.">
           <input type="checkbox" id="autoSw" checked>
           <span class="trk" aria-hidden="true"></span><span class="lbl">Autopilot</span>
         </label>
@@ -602,20 +604,20 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     </section>
 
     <aside class="gate" aria-labelledby="gateH">
-      <p class="eyebrow"><span>Approval gate</span></p>
-      <h2 id="gateH">You approve. <em>Then it&rsquo;s used.</em></h2>
+      <p class="eyebrow"><span>End of the chain</span></p>
+      <h2 id="gateH">You approve the final. <em>Nothing else.</em></h2>
       <div class="gate-big">
         <p class="gate-n zero" id="gateN">0</p>
-        <p class="gate-cap">Waiting<br>on you</p>
+        <p class="gate-cap">Final<br>for you</p>
       </div>
       <dl class="gate-stats" aria-label="Task counts">
         <div><dt>Planned</dt><dd id="gsPlanned">0</dd></div>
         <div><dt>Working</dt><dd id="gsWorking">0</dd></div>
-        <div><dt>Approved</dt><dd id="gsOk">0</dd></div>
-        <div><dt>Sent back</dt><dd id="gsBack">0</dd></div>
+        <div><dt>Manager passed</dt><dd id="gsOk">0</dd></div>
+        <div><dt>Redoing</dt><dd id="gsBack">0</dd></div>
       </dl>
       <ul class="gate-list" id="gateList"></ul>
-      <p class="gate-rule"><b>Human review</b> before anything is used. Agents can't send, post or spend anything. They draft, and you approve or send it back with a note. Autopilot never approves for you: the Tester's buyer votes decide if the product moves on, and you approve once, on the final package.</p>
+      <p class="gate-rule"><b>One sign-off.</b> Each bot hands its work to the next one. The manager checks every step and passes it on or sends it back to be fixed, and the Tester's buyer votes decide if the product moves on. You only see and approve the final package. Agents can't send, post or spend anything.</p>
     </aside>
   </main>
 
@@ -777,6 +779,17 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     Tester: "You test before anything reaches customers. Job one, the buyer panel: build 30 different buyers from the target customer (different income, age, habits and doubts), show each the same pitch, and record for each whether they would buy, why in their own words, their main objection and what would change their mind. Count the answers, give the buy rate, group the reasons, and warn that simulated buyers lean agreeable, so the rate is an upper bound. Job two, the quality check: read the site or app code and list defects by severity (broken, confusing, slow, inaccessible, unsafe), and say which checks must be run for real because you can't run code. Give a pass or fail with the numbers behind it. Never state a result you did not count.",
   };
   const STATUS = { planned: "Planned", returned: "Sent back", working: "Working", review: "Needs your OK", approved: "Approved" };
+  // Only the final package ever waits on the owner. Every other step is checked and passed on by the manager.
+  function statusLabel(x) {
+    if (x.kind !== "final") {
+      if (x.decision === "redo") return "Sent back by the manager";
+      if (x.passedBy) return "Passed by the manager";
+      if (x.status === "review") return "Handed on";
+      if (x.status === "returned" && x.noteBy === "manager") return "Sent back by the manager";
+    }
+    return STATUS[x.status] || x.status;
+  }
+  const pillClass = (x) => (x.kind !== "final" && x.status === "review" ? "approved" : x.status);
 
   const S = {
     db: null, user: null, sample: null, room: null, mcp: null,
@@ -1091,11 +1104,12 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     updateAgentSelectors();
     const t = S.tasks;
     const count = (st) => t.filter((x) => st.includes(x.status)).length;
-    const gateTasks = t.filter((x) => x.status === "review" && !heldBack(x)).sort((a, b) => (a.finishedAt || "").localeCompare(b.finishedAt || ""));
+    const gateTasks = t.filter((x) => x.status === "review" && x.kind === "final").sort((a, b) => (a.finishedAt || "").localeCompare(b.finishedAt || ""));
     setNum($("#sAgents"), S.agents.length);
     setNum($("#sMotion"), count(["planned", "returned", "working"]));
     setNum($("#sGate"), gateTasks.length);
-    setNum($("#sOk"), count(["approved"]));
+    const finOk = t.filter((x) => x.kind === "final" && x.status === "approved").length;
+    setNum($("#sOk"), finOk);
     const here = hereIds();
     $("#sHere").textContent = S.room ? Math.max(1, here.length) : "1";
     $("#livePill").classList.toggle("off", !S.db);
@@ -1110,15 +1124,15 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     $("#mTime").textContent = spans.length ? fmtDur(spans.reduce((s, d) => s + d, 0) / spans.length) : "—";
     setNum($("#gsPlanned"), count(["planned"]));
     setNum($("#gsWorking"), count(["working"]));
-    setNum($("#gsOk"), count(["approved"]));
+    setNum($("#gsOk"), t.filter((x) => x.kind !== "final" && x.passedBy && x.decision !== "redo").length);
     setNum($("#gsBack"), count(["returned"]));
-    const phase = S.planning ? "brief" : S.auto || count(["working"]) ? "draft" : gateTasks.length ? "review" : count(["approved"]) ? "done" : "brief";
+    const phase = S.planning ? "brief" : S.auto || count(["working"]) ? "draft" : gateTasks.length ? "review" : finOk ? "done" : "brief";
     document.querySelectorAll("#phases li").forEach((li) => {
       const on = li.dataset.ph === phase;
       li.classList.toggle("on", on);
       if (on) li.setAttribute("aria-current", "step"); else li.removeAttribute("aria-current");
     });
-    renderTicker({ agents: S.agents.length, motion: count(["planned", "returned", "working"]), gate: gateTasks.length, ok: count(["approved"]) });
+    renderTicker({ agents: S.agents.length, motion: count(["planned", "returned", "working"]), gate: gateTasks.length, ok: finOk });
     renderTerm();
 
     // faces
@@ -1185,28 +1199,29 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
           h("div", { class: "t", text: x.title }),
           h("div", { class: "row" }, h("span", { class: "muted", text: fin ? "Built from " + n + " draft" + (n === 1 ? "" : "s") : x.goalText ? "Goal: " + clip(x.goalText, 48) : "Direct task" }),
             h("button", { class: "btn small primary", type: "button", "data-act": "review", "data-id": x.id }, fin ? "Review package" : "Review")));
-      }) : [h("li", { class: "gate-empty", text: S.auto || S.planning ? "Autopilot is working. The final package lands here for your OK." : S.tasks.length ? "Nothing is waiting. Run a planned task to get a draft." : "Drafts from your agents land here for your OK." })]),
+      }) : [h("li", { class: "gate-empty", text: S.auto || S.planning ? "The chain is working. The manager passes each step along, and the final package lands here for your OK." : "Nothing is waiting on you. Give the manager a goal and the crew brings you one final package." })]),
     );
 
     // board
+    const finished = (x) => x.status === "review" || x.status === "approved";
     const cols = [
-      ["planned", "Planned", ["planned", "returned"]],
-      ["working", "Working", ["working"]],
-      ["review", "Needs your OK", ["review"]],
-      ["approved", "Approved", ["approved"]],
+      ["planned", "Planned", (x) => x.status === "planned" || x.status === "returned"],
+      ["working", "Working", (x) => x.status === "working"],
+      ["shared", "Passed by the manager", (x) => x.kind !== "final" && finished(x)],
+      ["final", "Final draft", (x) => x.kind === "final" && finished(x)],
     ];
     { const g = $("#board .held-group"); if (g) S.heldOpen = g.open; }
-    put($("#board"), ...cols.map(([key, label, sts]) => {
-      const all =t.filter((x) => sts.includes(x.status)).sort((a, b) => (b.updatedAt || b.createdAt || "").localeCompare(a.updatedAt || a.createdAt || ""));
-      // Drafts that Autopilot folded into a final package don't need you. They sit in a closed group under the column.
-      const held = key === "review" ? all.filter(heldBack) : [];
-      const items = held.length ? all.filter((x) => !heldBack(x)) : all;
+    put($("#board"), ...cols.map(([key, label, test]) => {
+      const all = t.filter(test).sort((a, b) => (b.updatedAt || b.createdAt || "").localeCompare(a.updatedAt || a.createdAt || ""));
+      // Only the newest version of each step shows. Older tries (sent back by the manager or the buyers) fold away.
+      const older = key === "shared" ? all.filter((x) => x.pipe && x.stage && latestOf(x.goalId, x.stage) !== x) : [];
+      const items = older.length ? all.filter((x) => !older.includes(x)) : all;
       return h("div", { class: "col " + key },
         h("div", { class: "col-h" }, h("b", { text: label }), h("span", { class: "n", text: items.length })),
-        items.length ? items.slice(0, 40).map(card) : held.length ? null : h("p", { class: "empty-col", text: emptyColText(key) }),
-        held.length ? h("details", { class: "held-group", open: S.heldOpen },
-          h("summary", { text: held.length + " supporting step" + (held.length === 1 ? "" : "s") + (held.some((x) => !S.tasks.some((y) => y.goalId === x.goalId && y.kind === "final")) ? " · nothing to review until the final package arrives" : " · covered by the package") }),
-          held.map((x) => { const a = agentById(x.agentId); return h("button", { class: "held-row", type: "button", "data-act": "review", "data-id": x.id, c: a ? a.color : null }, h("span", { class: "dot", c: a ? a.color : null }), h("span", { class: "ttl", text: x.title }), h("span", { class: "who2", text: a ? a.name : "Removed agent" })); })) : null);
+        items.length ? items.slice(0, 40).map(card) : older.length ? null : h("p", { class: "empty-col", text: emptyColText(key) }),
+        older.length ? h("details", { class: "held-group", open: S.heldOpen },
+          h("summary", { text: older.length + " older version" + (older.length === 1 ? "" : "s") + " · replaced by a newer try" }),
+          older.map((x) => { const a = agentById(x.agentId); return h("button", { class: "held-row", type: "button", "data-act": "review", "data-id": x.id, c: a ? a.color : null }, h("span", { class: "dot", c: a ? a.color : null }), h("span", { class: "ttl", text: x.title }), h("span", { class: "who2", text: a ? a.name : "Removed agent" })); })) : null);
     }));
     const planned = t.filter((x) => (x.status === "planned" || x.status === "returned") && !x.pipe).length;
     const runAll = $("#runAllBtn");
@@ -1256,7 +1271,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
 
   function emptyColText(key) {
     return { planned: "Brief the manager, or give an agent a direct task.", working: "Nobody is working right now.",
-      review: "Finished drafts wait here for you.", approved: "Approved work collects here." }[key];
+      shared: "Each finished step lands here once the manager passes it on to the next bot.", final: "The finished product lands here for your OK. It is the only thing you approve." }[key];
   }
   const clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
 
@@ -1268,17 +1283,18 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     if (canRun() && (x.status === "planned" || x.status === "returned") && !autoBusy(x)) acts.push(h("button", { class: "btn small primary", type: "button", "data-act": "run", "data-id": x.id }, x.status === "returned" ? "Run again" : "Run"));
     if (mine && !autoBusy(x)) acts.push(h("button", { class: "btn small", type: "button", "data-act": "stop", "data-id": x.id }, "Stop"));
     if (stale && canAct()) acts.push(h("button", { class: "btn small", type: "button", "data-act": "unstick", "data-id": x.id }, "Move back to planned"));
-    if (x.status === "review") acts.push(h("button", { class: "btn small primary", type: "button", "data-act": "review", "data-id": x.id }, x.kind === "final" ? "Review package" : "Review"));
+    if (x.status === "review" && x.kind === "final") acts.push(h("button", { class: "btn small primary", type: "button", "data-act": "review", "data-id": x.id }, "Review package"));
     return h("article", { class: "card" + (x.kind === "final" ? " final" : ""), c: a ? a.color : null },
       h("button", { class: "t", type: "button", "data-act": "review", "data-id": x.id }, x.title),
       h("div", { class: "meta" }, h("span", { class: "dot", c: a ? a.color : null }), a ? a.name : "Removed agent",
         x.kind === "final" ? h("span", { class: "pkg" }, "Final package") : null,
+        x.kind !== "final" && x.decision === "redo" ? h("span", { class: "pkg redo" }, "sent back") : x.kind !== "final" && x.passedBy ? h("span", { class: "pkg mgr" }, "passed by " + nameOf(agentById(x.passedBy))) : null,
         x.votes ? h("span", { class: "pkg vote " + (x.votes.pass ? "pass" : "fail") }, x.votes.yes + "/" + x.votes.total + " · " + (x.votes.pass ? "passed" : "not enough")) : null,
         x.status === "working" ? h("span", { class: "working-tag" }, mine ? "· writing…" : ["· run by ", who(x.ranBy)]) : null),
       x.status === "working" && mine ? h("p", { class: "live", "data-live": x.id, text: S.live[x.id] || "Thinking…" }) : null,
       x.status !== "working" && x.output ? h("p", { class: "prev", text: x.output }) : null,
       x.status !== "working" && !x.output && x.brief ? h("p", { class: "prev", text: x.brief }) : null,
-      x.status === "returned" && x.note ? h("p", { class: "note", text: "Your note: " + clip(x.note, 140) }) : null,
+      x.status === "returned" && x.note ? h("p", { class: "note", text: (x.noteBy === "manager" ? "Manager's note: " : "Your note: ") + clip(x.note, 140) }) : null,
       x.error && x.status !== "working" ? h("p", { class: "err", text: x.error }) : null,
       acts.length ? h("div", { class: "acts" }, acts) : null,
     );
@@ -1375,7 +1391,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     tickKey = key;
     const items = [
       ["Crew Control", null], ["Agents ", n.agents], ["In motion ", n.motion], ["Waiting on you ", n.gate, n.gate ? "hot" : ""],
-      ["Approved ", n.ok], ["Nothing is used until you approve it", null], ["They draft. You decide.", null],
+      ["Approved ", n.ok], ["The manager passes every step", null], ["One chain. One sign-off.", null],
     ];
     const set = () => h("div", { class: "tk-set" }, [...items, ...items].map(([a, b, cls]) => h("span", { class: cls || null }, a, b != null ? h("b", { text: b }) : null)));
     put($("#tickerTrack"), set(), set());
@@ -1407,7 +1423,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
   }
 
   // ---------- prompts
-  const LIMITS = "You can't browse the web, send messages, post, spend money or take any action. You only write drafts, and a human reviews and approves each one before it is used. Never invent facts, results, quotes, reviews or numbers; when something needs checking, say so plainly.";
+  const LIMITS = "You can't browse the web, send messages, post, spend money or take any action. You only write drafts. Your manager checks each draft before it moves to the next teammate, and the owner approves only the final package. Never invent facts, results, quotes, reviews or numbers; when something needs checking, say so plainly.";
   function planPrompt(mgr, goal) {
     const crew = S.agents.map((a) => "- id: " + a.id + " | name: " + a.name + " | role: " + a.role + " | strengths: " + clip(a.instructions || "", 220)).join("\n");
     return "You are " + mgr.name + ", the manager of a small AI crew. " + (mgr.instructions || "") + "\n" + LIMITS +
@@ -1429,27 +1445,28 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
       const drafts = same.filter((y) => y.kind !== "final" && (y.status === "review" || y.status === "approved"))
         .sort((p, q) => (p.createdAt || "").localeCompare(q.createdAt || ""));
       const per = Math.max(900, Math.min(6000, Math.floor(26000 / Math.max(1, drafts.length))));
-      ctx = drafts.map((y) => "\n### " + y.title + " (by " + owner(y) + "; " + (y.status === "approved" ? "approved by the owner" : "the owner has not reviewed it yet") + ")\n" + clip(y.output, per) + "\n").join("");
+      ctx = drafts.filter((y) => y.decision !== "redo").map((y) => "\n### " + y.title + " (by " + owner(y) + "; " + (y.passedBy ? "passed by the manager" : y.status === "approved" ? "approved by the owner" : "not checked yet") + ")\n" + clip(y.output, per) + "\n").join("");
       head = "\n\nThe finished drafts from your teammates. Build the package only from these:";
     } else {
       // A task that builds on earlier ones sees their drafts even before the owner reviews them; everything else it sees must be approved.
       const need = (x.after || []).map((id) => same.find((y) => y.id === id)).filter((y) => y && (y.status === "review" || y.status === "approved"));
-      const ok = same.filter((y) => y.status === "approved" && !need.includes(y));
+      const ok = same.filter((y) => (y.status === "approved" || y.status === "review") && y.decision !== "redo" && !need.includes(y));
       let budget = 12000;
       const add = (y, n, tag) => {
         const piece = "\n### " + y.title + " (by " + owner(y) + tag + ")\n" + clip(y.output, n) + "\n";
         if (piece.length > budget) return;
         budget -= piece.length; ctx += piece;
       };
-      for (const y of need) add(y, 3500, y.status === "approved" ? "; approved by the owner" : "; the owner has not reviewed it yet");
-      for (const y of ok) add(y, 1800, "; approved by the owner");
-      head = "\n\nWork your teammates already finished" + (need.length ? " (your task builds on the first " + (need.length === 1 ? "one" : need.length) + ")" : ", which the owner approved") + ":";
+      const tag = (y) => (y.passedBy ? "; passed by the manager" : y.status === "approved" ? "; approved by the owner" : "; not checked yet");
+      for (const y of need) add(y, 3500, tag(y));
+      for (const y of ok) add(y, 1800, tag(y));
+      head = "\n\nWork your teammates already finished" + (need.length ? " (your task builds on the first " + (need.length === 1 ? "one" : need.length) + ")" : ", which the manager passed on") + ":";
     }
     return "You are " + a.name + ", the " + a.role + " on a small AI crew.\nYour standing instructions: " + (a.instructions || ROLES[a.role] || "Do excellent work in your role.") + "\n" + LIMITS +
       "\n\nCrew goal: " + (x.goalText || "None. This is a direct task from the owner.") +
       "\n\nYour task: " + x.title + "\nBrief: " + (x.brief || "(no brief given)") +
       (ctx ? head + ctx : "") +
-      (x.status === "returned" && x.output ? "\n\nYour previous draft:\n" + clip(x.output, 6000) + "\n\nThe owner sent it back with this note:\n" + (x.note || "(no note)") + "\nRevise the draft to address the note." : "") +
+      (x.status === "returned" && x.output ? "\n\nYour previous draft:\n" + clip(x.output, 6000) + "\n\n" + (x.noteBy === "manager" ? "Your manager" : "The owner") + " sent it back with this note:\n" + (x.note || "(no note)") + "\nRevise the draft to address the note." : "") +
       "\n\nWrite the finished deliverable now. Start with the deliverable itself, with no preamble. Use plain text with short headings and lists where they help. " +
       (x.kind === "final" ? "End with a section that starts with the words \"Check before using:\" followed by a numbered list of everything the owner should verify, or \"Check before using: nothing\"." : "End with a short line starting \"Check before using:\" listing anything the owner should verify, or \"Check before using: nothing\".") +
       "\nThe draft is shown as plain text, so do not use markdown symbols such as ** or #. Write headings as plain lines and lists with hyphens. Keep any code in indented blocks.";
@@ -1565,6 +1582,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
       delete S.ctl[id]; delete S.live[id];
       scheduleRender();
     }
+    if (ok && !x.pipe && x.kind !== "final") await directPass(id);
     return ok;
   }
 
@@ -1580,7 +1598,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
       done++;
     }
     S.runningAll = false;
-    stageStatus(done ? done + " draft" + (done === 1 ? "" : "s") + " ready for your review." : "");
+    stageStatus(done ? done + " task" + (done === 1 ? "" : "s") + " finished and checked by the manager." : "");
     scheduleRender();
   }
 
@@ -1601,7 +1619,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     while (Date.now() < end) { if (fn()) return true; await sleep(120); }
     return !!fn();
   }
-  function autoOn() { const el = $("#autoSw"); return !!el && el.checked; }
+  function autoOn() { return true; } // the crew always works as one chain now
   const autoBusy = (x) => !!S.auto && S.auto.goalId === x.goalId;
   // A step made under Autopilot waits behind its goal's final package, so the owner reviews one thing instead of many.
   function heldBack(x) {
@@ -1704,6 +1722,10 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
         revise = "\n\nTHE MANAGER'S CONSISTENCY CHECK FOUND A PROBLEM in your step. Your previous version:\n" + clip(prev.output || "", 6000) +
           "\n\nWhat the Manager found:\n" + clip(x.problem || fb.output || "", 1500) +
           "\n\nFix this so your step agrees with the concept and the other steps, without losing what already works. Start your reply with a section called WHAT CHANGED that lists each change and the conflict it answers. Then give the complete revised " + s.label.toLowerCase() + ".";
+      } else if (prev && x.mgrAsk) {
+        revise = "\n\nYOUR MANAGER SENT THIS STEP BACK before handing it to the next teammate. Your previous version:\n" + clip(prev.output || "", s.key === "build" ? 14000 : 6000) +
+          "\n\nWhat the manager wants fixed:\n" + clip(x.mgrAsk, 900) +
+          "\n\nFix those points without losing what already works. Start your reply with a section called WHAT CHANGED that lists each change. Then give the complete revised " + s.label.toLowerCase() + (s.key === "build" ? " (the whole file, not a patch)" : "") + ".";
       } else if (prev && fb && fb.votes) {
         revise = "\n\nTHE BUYER TEST FAILED. Your previous version of this step:\n" + clip(prev.output || "", s.key === "build" ? 14000 : 6000) +
           "\n\nThe Tester's " + fb.votes.total + " simulated buyers voted " + fb.votes.yes + " yes. It needs " + fb.votes.need + ". Their verdict:\n" + clip(fb.digest || fb.output || "", 3500) +
@@ -1787,6 +1809,58 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
       "\n\nYOUR STEP: Final package. Write the one document the owner will review and approve. Open with a one-paragraph summary of the product and whether it won the buyers over. Then merge every step above into one consistent package: the concept, what it looks like, what was built (the built file is kept in the Build step, where the owner can copy it, so do not repeat the code), the price, how it runs on day one, how to win the first customers and the launch plan. Say which changes came from buyer tests. Point out any place where two steps disagree. End with the three next steps for the owner, in order. Use only what is in the steps above and never add facts, numbers or quotes." +
       (x.status === "returned" && x.output ? "\n\nYour previous draft:\n" + clip(x.output, 6000) + "\n\nThe owner sent it back with this note:\n" + (x.note || "(no note)") + "\nRevise the draft to address the note." : "") +
       "\n\nStart with the package itself, with no preamble. Use plain text with short headings and lists. End with a section that starts with the words \"Check before using:\" followed by a numbered list of everything the owner should verify, including that the buyer votes were simulated.\nThe draft is shown as plain text, so do not use markdown symbols such as ** or #. Write headings as plain lines and lists with hyphens.";
+  }
+
+  // ----- the manager's sign-off: the manager stands in for the owner on every step except the final package
+  function mgrReviewPrompt(mgr, t, s, stages) {
+    const a = agentById(t.agentId);
+    let ctx = "";
+    if (s && stages) {
+      const idx = stages.findIndex((z) => z.key === s.key);
+      for (const z of stages.slice(0, Math.max(0, idx)).filter((q) => q.kind === "make")) {
+        const p = latestOf(t.goalId, z.key);
+        if (FINISHED(p)) ctx += "\n### " + z.label + "\n" + clip(stripCode(p.output), 1500) + "\n";
+      }
+    }
+    const ask = s ? STAGE_ASK[s.key] || t.brief || "" : t.brief || "(no brief)";
+    const body = s && s.key === "build" ? clip(t.output || "", 12000) : clip(stripCode(t.output || ""), 7000);
+    return "You are " + mgr.name + ", the manager of a small AI crew. " + (mgr.instructions || "") + "\n" + LIMITS +
+      "\n\nYou stand in for the owner. The crew works as a chain: nothing moves to the next teammate until you pass it, and the owner only sees the final package." +
+      "\n\nThe owner's goal: " + (t.goalText || "None. This is a direct task from the owner.") +
+      (ctx ? "\n\nThe steps already passed, in order:" + ctx : "") +
+      "\n\nTHE WORK TO CHECK: " + (s ? s.label : t.title) + ", by " + nameOf(a) + ".\nWhat was asked: " + ask + "\n\"\"\"\n" + body + "\n\"\"\"" +
+      "\n\nPass it if it does what was asked, agrees with the steps already passed (same product name, customer, promise and price), and has no serious gap the next teammate would trip over. Send it back only for a real problem the writer can fix by rewriting. Never send it back for things nobody on the crew can supply, such as real reviews, signed customers, licences or live data: those belong in the final package as the owner's to-do list." +
+      "\n\nReply with one line only, in one of these two shapes:\nPASS: one sentence on why it is ready.\nREDO: what to fix, in at most five short points separated by semicolons.";
+  }
+  function parseVerdict(text) {
+    const s = String(text || "").trim();
+    const m = /(?:^|\n)\s*REDO\s*[:\-\u2013\u2014]?\s*([\s\S]+)/i.exec(s);
+    if (m && m[1].trim() && !/^\s*PASS\b/i.test(s)) return { pass: false, note: clip(m[1].trim(), 800) };
+    const p = /PASS\s*[:\-\u2013\u2014]?\s*(.*)/i.exec(s);
+    return { pass: true, note: clip(((p && p[1]) || "").trim() || "Ready for the next step.", 400) };
+  }
+  // A direct task (one agent, no chain) is checked by the manager too. One send-back at most, then it is passed on.
+  async function directPass(id) {
+    const mgr = managerAgent();
+    const x = S.tasks.find((y) => y.id === id);
+    if (!mgr || !x || x.pipe || x.kind === "final" || x.status !== "review") return;
+    let note = "Ready to use.";
+    if (!x.mgrRedone) {
+      let v = null;
+      try { v = parseVerdict(await callAgent(mgr, mgrReviewPrompt(mgr, x, null, null))); } catch (e) { v = null; }
+      if (v && !v.pass) {
+        const ok = await write(() => S.db.doc("tasks/" + id).update({ status: "returned", note: clip(v.note, 800), noteBy: "manager", mgrRedone: true, updatedAt: nowIso() }), "Couldn't send it back. Try again.");
+        if (ok) {
+          await until(() => (S.tasks.find((y) => y.id === id) || {}).status === "returned", 4000);
+          stageStatus(mgr.name + " sent \u201c" + clip(x.title, 60) + "\u201d back to " + nameOf(agentById(x.agentId)) + " to fix…");
+          await runTask(id);
+        }
+        return;
+      }
+      if (v) note = v.note;
+    } else note = "Fixed after the manager's notes.";
+    await write(() => S.db.doc("tasks/" + id).update({ status: "approved", decision: "manager", passedBy: mgr.id, passedAt: nowIso(), passNote: clip(note, 400), updatedAt: nowIso() }), "Couldn't pass it on. Try again.");
+    stageStatus(mgr.name + " passed \u201c" + clip(x.title, 60) + "\u201d on to the crew.");
   }
 
   // ----- the Tester's buyer vote
@@ -1952,6 +2026,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     const A = S.auto;
     if (!A || A.stopping) return;
     A.stopping = true;
+    if (A.ctl) A.ctl.abort();
     for (const id of Object.keys(S.ctl)) {
       const x = S.tasks.find((y) => y.id === id);
       if (x && x.goalId === A.goalId) S.ctl[id].abort();
@@ -2020,6 +2095,25 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
         title: s.label + (round > 1 ? " · try " + round : "") + ": " + clip(goalText, 64), brief: clip(STAGE_ASK[s.key] || "", 600), after: [], ...extra,
       });
 
+      // The manager signs each step off and hands it to the next role, so the owner never has to.
+      const passStep = async (t, note) => {
+        if (!t || t.status === "approved") return;
+        await S.db.doc("tasks/" + t.id).update({ status: "approved", decision: "manager", passedBy: mgr.id, passedAt: nowIso(), passNote: note ? clip(String(note), 400) : null, updatedAt: nowIso() }).catch(() => {});
+        await until(() => (S.tasks.find((y) => y.id === t.id) || {}).status === "approved", 4000);
+      };
+      const managerVerdict = async (t, s) => {
+        for (let n = 0; n < AUTO_TRIES; n++) {
+          if (A.stopping || A.fatal) return null;
+          const ctl = (A.ctl = new AbortController());
+          try { return parseVerdict(await callAgent(mgr, mgrReviewPrompt(mgr, t, s, stages), ctl.signal)); }
+          catch (e) {
+            if (A.stopping || (e && (e.code === "cancelled" || e.name === "AbortError"))) return null;
+            if (e && AUTO_FATAL.includes(e.code)) { A.fatal = e.code; return null; }
+            if (e && e.code === "rate_limited") await sleep(8000);
+          } finally { A.ctl = null; }
+        }
+        return { pass: true, note: "The manager's check didn't finish, so the step was passed on as it stands." };
+      };
       const ensureMake = async (s, i) => {
         say(i, s.label + " · " + wa(s) + " is writing");
         let t = await resetStale(latestOf(goalId, s.key));
@@ -2029,6 +2123,20 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
         }
         t = latestOf(goalId, s.key);
         if (!FINISHED(t)) { A.failed = { s, text: t && t.error }; return false; }
+        if (t.status === "approved") return true;
+        // A first version is checked by the manager. A fix (after the manager or the buyers) is passed on straight away.
+        if (t.revises) { await passStep(t, t.mgrAsk ? "Fixed after the manager's notes." : "Tweaked after a buyer test."); return true; }
+        say(i, s.label + " · " + mgr.name + " is checking " + wa(s) + "\u2019s work");
+        const v = await managerVerdict(t, s);
+        if (!v) return false;
+        if (v.pass) { await passStep(t, v.note); return true; }
+        await S.db.doc("tasks/" + t.id).update({ status: "approved", decision: "redo", redoNote: v.note, updatedAt: nowIso() }).catch(() => {});
+        say(i, mgr.name + " sent " + s.label.toLowerCase() + " back. " + wa(s) + " is fixing it");
+        const r = await addTask(makeData(s, i, (t.round || 1) + 1, { revises: t.id, mgrAsk: v.note, plannedBy: mgr.id }));
+        if (!(await attempt(r.id, runTask))) { A.failed = { s, text: (S.tasks.find((y) => y.id === r.id) || {}).error }; return false; }
+        t = latestOf(goalId, s.key);
+        if (!FINISHED(t)) { A.failed = { s, text: t && t.error }; return false; }
+        await passStep(t, "Fixed after the manager's notes.");
         return true;
       };
       const ensureGate = async (s, i) => {
@@ -2059,6 +2167,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
           }
           g = latestOf(goalId, s.key);
           if (!FINISHED(g) || !g.votes) { A.failed = { s, text: g && g.error }; return { ok: false }; }
+          await passStep(g, g.votes.pass ? "Won the buyer vote, so the product moves on." : "Did not win the buyer vote, so the step goes back for a tweak.");
           if (g.votes.pass) return { ok: true };
           // Not enough yes votes. The step's owner tweaks it using the buyers' objections, then the test runs again.
           // No limit: it keeps tweaking and re-testing until a majority says yes. Pause stops it at any time.
@@ -2074,6 +2183,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
           }
           const nx = latestOf(goalId, fs.key);
           if (!FINISHED(nx)) { A.failed = { s: fs, text: nx && nx.error }; return { ok: false }; }
+          await passStep(nx, "Tweaked after the buyer test.");
           // The tweak also saves what changed, so later steps treat it as part of the product.
           if (!nx.changes) {
             const m = /WHAT CHANGED[:\s]*([\s\S]*?)(?:\n\s*\n|$)/i.exec(nx.output || "");
@@ -2092,6 +2202,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
         }
         c = latestOf(goalId, "check");
         if (!FINISHED(c)) { A.failed = { s, text: c && c.error }; return false; }
+        await passStep(c, "The manager's own check of the whole product.");
         for (const f of parseFixes(c.output, fixableFor(stages, i))) {
           const fs = f.stage, fi = idxOf(fs.key);
           let fx = goalTasks(goalId).find((y) => y.stage === fs.key && y.feedbackFrom === c.id);
@@ -2106,6 +2217,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
           }
           const nx = S.tasks.find((y) => y.id === fx.id);
           if (!FINISHED(nx)) { A.failed = { s: fs, text: nx && nx.error }; return false; }
+          await passStep(nx, "Fixed after the consistency check.");
           if (!nx.changes) {
             const m = /WHAT CHANGED[:\s]*([\s\S]*?)(?:\n\s*\n|$)/i.exec(nx.output || "");
             await S.db.doc("tasks/" + nx.id).update({ changes: clip((m && m[1].trim()) || (nx.output || "").slice(0, 400), 600) }).catch(() => {});
@@ -2202,8 +2314,8 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     if (!x) return;
     S.reviewStatus = x.status;
     const a = agentById(x.agentId);
-    const decide = x.status === "review" && canAct();
     const fin = x.kind === "final";
+    const decide = fin && x.status === "review" && canAct();
     // The drafts a final package was built from. They are approved with it, unless the owner unticks the box.
     const parts = fin ? S.tasks.filter((y) => y.goalId === x.goalId && y.kind !== "final" && (x.after || []).includes(y.id)) : [];
     const loose = parts.filter((y) => y.status === "review");
@@ -2213,12 +2325,15 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
         h("h2", { id: "reviewH", text: x.title })),
         h("button", { class: "x", type: "button", "data-act": "close", "aria-label": "Close" }, "×")),
       h("dl", { class: "kv" },
-        h("dt", { text: "Status" }), h("dd", {}, h("span", { class: "pill " + x.status, text: STATUS[x.status] || x.status })),
+        h("dt", { text: "Status" }), h("dd", {}, h("span", { class: "pill " + pillClass(x), text: statusLabel(x) })),
         h("dt", { text: "Goal" }), h("dd", { text: x.goalText || "Direct task" }),
         h("dt", { text: "Brief" }), h("dd", { text: x.brief || "No brief" }),
-        fin && parts.length ? [h("dt", { text: "Built from" }), h("dd", {}, h("ul", { class: "built-from" }, parts.map((y) => h("li", { text: y.title + " (" + ((agentById(y.agentId) || {}).name || "Removed agent") + ", " + (STATUS[y.status] || y.status).toLowerCase() + ")" }))))] : null,
+        fin && parts.length ? [h("dt", { text: "Built from" }), h("dd", {}, h("ul", { class: "built-from" }, parts.map((y) => h("li", { text: y.title + " (" + ((agentById(y.agentId) || {}).name || "Removed agent") + ", " + statusLabel(y).toLowerCase() + ")" }))))] : null,
         x.modelUsed ? [h("dt", { text: "Written by" }), h("dd", { text: (a ? ENGINES[engineOf(a)] + " · " : "") + x.modelUsed })] : null,
-        x.decidedAt ? [h("dt", { text: "Decided" }), h("dd", {}, who(x.decidedBy), " " + ago(x.decidedAt))] : null),
+        x.decidedAt ? [h("dt", { text: "Decided" }), h("dd", {}, who(x.decidedBy), " " + ago(x.decidedAt))] : null,
+        !fin && x.mgrAsk ? [h("dt", { text: "Manager asked" }), h("dd", { text: x.mgrAsk })] : null,
+        !fin && x.decision === "redo" ? [h("dt", { text: "Manager" }), h("dd", { text: "Sent it back: " + (x.redoNote || "") })] : null,
+        !fin && x.passedBy && x.decision !== "redo" ? [h("dt", { text: "Manager" }), h("dd", { text: nameOf(agentById(x.passedBy)) + " passed it on " + ago(x.passedAt) + (x.passNote ? ": " + x.passNote : "") })] : null),
       x.votes ? h("div", {}, h("div", { class: "votebar", role: "img", "aria-label": x.votes.yes + " of " + x.votes.total + " simulated buyers said yes. " + x.votes.need + " were needed." },
         h("span", { class: "y", style: "width:" + Math.round((x.votes.yes / x.votes.total) * 100) + "%" }), h("span", { class: "need", style: "left:" + Math.round((x.votes.need / x.votes.total) * 100) + "%" })),
         h("p", { class: "vote-cap", text: x.votes.yes + " yes · " + x.votes.no + " no · " + x.votes.need + " yes needed to pass · simulated buyers" })) : null,
@@ -2236,7 +2351,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
         x.stage === "build" && extractCode(x.output) ? h("button", { class: "btn", type: "button", "data-act": "copy-code", "data-id": x.id, title: "Copies the finished page. Paste it into a file called index.html and open it." }, "Copy website file") : null,
         decide ? h("button", { class: "btn", type: "button", "data-act": "send-back", "data-id": x.id }, "Send back") : null,
         decide ? h("button", { class: "btn ok", type: "button", "data-act": "approve", "data-id": x.id }, fin ? "Approve package" : "Approve") : null,
-        x.status === "approved" && canAct() ? h("button", { class: "btn", type: "button", "data-act": "reopen", "data-id": x.id }, "Move back to review") : null,
+        fin && x.status === "approved" && canAct() ? h("button", { class: "btn", type: "button", "data-act": "reopen", "data-id": x.id }, "Move back to review") : null,
       ),
     );
     fillNames();
@@ -2582,7 +2697,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
   // ---------- event wiring
   $("#inviteBtn").addEventListener("click", openInvite);
   // Autopilot starts on. The choice is remembered on this device.
-  try { if (localStorage.getItem("crew.autopilot") === "off") $("#autoSw").checked = false; } catch { /* storage may be blocked */ }
+  
   $("#autoSw").addEventListener("change", () => {
     try { localStorage.setItem("crew.autopilot", $("#autoSw").checked ? "on" : "off"); } catch { /* ignore */ }
     $("#briefBtn").title = $("#autoSw").checked ? "The manager plans it, the crew does the work, and you approve one final package." : "The manager plans it. You run each task yourself.";
@@ -2793,7 +2908,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
       return {
         id: a.id, a, idx: i + 1, base: -Math.PI / 2 + (i / Math.max(1, n)) * Math.PI * 2 + (n === 2 ? Math.PI / 2 : 0),
         x: prev ? prev.x : V.cx, y: prev ? prev.y : V.cy, r: prev ? prev.r : 18, k: 1, fa: prev ? prev.fa : null, cover: prev ? prev.cover : 0, hit: prev ? prev.hit : 0,
-        working: mine.some((x) => x.status === "working"), waiting: mine.filter((x) => x.status === "review").length, total: mine.length,
+        working: mine.some((x) => x.status === "working"), waiting: mine.filter((x) => x.status === "review" && x.kind === "final").length, total: mine.length,
       };
     });
   }

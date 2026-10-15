@@ -11,36 +11,38 @@ let failed = 0;
   await page.addInitScript(stubInit);
   await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
   await page.goto('file://' + path.resolve('crew-control.html'));
-  await page.waitForSelector('.chip'); await page.uncheck('#autoSw'); // these checks are about planning and engines, so Autopilot stays off
+  await page.waitForSelector('.chip');
   const ok = (c, m) => { if (!c) failed++; console.log((c ? 'ok   ' : 'FAIL ') + m); };
-  const run = async (id) => { await page.click(`[data-act="run"][data-id="${id}"]`); await page.waitForFunction((i) => window.__store.tasks[i].status === 'review' || window.__store.tasks[i].error, id, { timeout: 5000 }); return page.evaluate((i) => window.__store.tasks[i], id); };
-  const lastSample = () => page.evaluate(() => window.__samples[window.__samples.length - 1]);
+  // A direct task now goes to the manager when it is finished, so the task's own call is the first one after Run.
+  let mark = 0;
+  const run = async (id) => { mark = await page.evaluate(() => window.__samples.length); await page.click(`[data-act="run"][data-id="${id}"]`); await page.waitForFunction((i) => window.__store.tasks[i].status === 'approved' || window.__store.tasks[i].error, id, { timeout: 5000 }); return page.evaluate((i) => window.__store.tasks[i], id); };
+  const lastSample = () => page.evaluate((m) => window.__samples[m], mark);
 
   const badges = await page.$$eval('.chip .engine-badge', (els) => els.map((e) => e.textContent));
   ok(badges.join(',') === 'Gemini', 'only the Gemini agent shows an engine badge (removed engines count as Claude): ' + badges.join(','));
 
   // Claude runs, tier per job
   let t = await run('t1'); let s = await lastSample();
-  ok(t.status === 'review' && s.modelTier === 'complex' && s.cache === false, 'Developer runs on Claude with the complex tier');
+  ok(t.status === 'approved' && s.modelTier === 'complex' && s.cache === false, 'Developer runs on Claude with the complex tier');
   ok(/careful senior engineer/.test(s.prompt) && /do not use markdown/.test(s.prompt), 'blank instructions fall back to the Developer playbook, and the plain-text note is on');
   t = await run('t2'); s = await lastSample();
   ok(s.modelTier === 'default' && /Write punchy copy/.test(s.prompt), 'Marketer runs on the default tier with its own instructions');
   t = await run('t3'); s = await lastSample();
   ok(s.modelTier === 'quick', 'Sales runs on the quick tier');
   t = await run('t4'); s = await lastSample();
-  ok(t.status === 'review' && s.modelTier === 'default' && !t.error, 'agent saved with a removed engine (mistral) now runs on Claude');
+  ok(t.status === 'approved' && s.modelTier === 'default' && !t.error, 'agent saved with a removed engine (mistral) now runs on Claude');
   t = await run('t6'); s = await lastSample();
-  ok(t.status === 'review' && s.modelTier === 'default', 'custom role runs on Claude with the default tier');
+  ok(t.status === 'approved' && s.modelTier === 'default', 'custom role runs on Claude with the default tier');
   t = await run('t7'); s = await lastSample();
-  ok(t.status === 'review' && s.modelTier === 'complex' && /self-contained HTML file/.test(s.prompt), 'Website Builder runs on the complex tier with its playbook');
+  ok(t.status === 'approved' && s.modelTier === 'complex' && /self-contained HTML file/.test(s.prompt), 'Website Builder runs on the complex tier with its playbook');
   t = await run('t8'); s = await lastSample();
-  ok(t.status === 'review' && s.modelTier === 'default' && /buyer panel/.test(s.prompt), 'Tester runs on the default tier with its playbook');
+  ok(t.status === 'approved' && s.modelTier === 'default' && /buyer panel/.test(s.prompt), 'Tester runs on the default tier with its playbook');
   ok((await page.evaluate(() => window.__calls.length)) === 0, 'no connector calls were made for Claude agents');
 
   // Gemini still works as an optional extra
   t = await run('t5'); let c = await page.evaluate(() => window.__calls[0]);
   ok(c.server === 'host:gemini-mcp' && c.tool === 'generate_content' && !('prefer' in c.input) && c.input.temperature === 0.3 && c.input.max_tokens === 5000, 'Gemini Researcher call: temp 0.3, 5000 tokens, no prefer');
-  ok(t.status === 'review' && t.modelUsed === 'model-of-host:gemini-mcp', 'Gemini draft saved with its model');
+  ok(t.status === 'approved' && t.modelUsed === 'model-of-host:gemini-mcp', 'Gemini draft saved with its model');
   await page.evaluate(() => { window.__mode = 'day'; return window.__db.doc('tasks/t5').update({ status: 'planned', error: null }); });
   await page.waitForSelector('[data-act="run"][data-id="t5"]');
   await page.click('[data-act="run"][data-id="t5"]');
@@ -91,21 +93,16 @@ let failed = 0;
   await page.waitForFunction(() => Object.values(window.__store.agents).some((a) => a.name === 'closer' && a.engine === 'claude' && a.role === 'Sales' && /earns replies/.test(a.instructions)), null, { timeout: 5000 });
   ok(true, 'new Sales agent saved on Claude with the playbook');
 
-  // planning: Claude manager uses the default tier
-  await page.evaluate(() => { window.__samples.length = 0; });
-  await page.fill('#goal', 'Launch the bakery');
-  await page.click('#briefBtn');
-  await page.waitForFunction(() => Object.values(window.__store.tasks).some((x) => x.title === 'Claude plan task'), null, { timeout: 5000 });
-  s = await lastSample();
-  ok(s.json === true && s.modelTier === 'default' && s.cache === false, 'Claude manager plans with sample.json on the default tier');
-  // planning: Gemini manager
+  // the manager checks every direct task and passes it on, on the manager's own engine
+  t = await page.evaluate(() => window.__store.tasks.t1);
+  let rv = await page.evaluate(() => window.__samples.filter((x) => /THE WORK TO CHECK/.test(x.prompt)));
+  ok(t.passedBy === 'mgr' && t.decision === 'manager' && rv.length >= 6 && /You stand in for the owner/.test(rv[0].prompt), 'a Claude manager checks each finished task on Claude and passes it on (' + rv.length + ' checks)');
   await page.evaluate(() => window.__db.doc('agents/mgr').update({ engine: 'gemini' }));
-  await page.evaluate(() => { window.__mode = 'plan'; window.__calls.length = 0; });
-  await page.fill('#goal', 'Launch the bakery again');
-  await page.click('#briefBtn');
-  await page.waitForFunction(() => Object.values(window.__store.tasks).some((x) => x.title === 'Gemini plan task'), null, { timeout: 5000 });
-  c = await page.evaluate(() => window.__calls.pop());
-  ok(c.server === 'host:gemini-mcp' && c.input.temperature === 0.3, 'Gemini manager plans through Gemini (fenced JSON parsed)');
+  await page.evaluate(() => { window.__mode = 'ok'; window.__calls.length = 0; return window.__db.doc('tasks/t3').update({ status: 'planned', passedBy: null, decision: null }); });
+  await page.waitForSelector('[data-act="run"][data-id="t3"]');
+  t = await run('t3');
+  c = await page.evaluate(() => window.__calls.find((x) => /THE WORK TO CHECK/.test(x.input.prompt || '')));
+  ok(t.passedBy === 'mgr' && c && c.server === 'host:gemini-mcp', 'a Gemini manager checks through Gemini');
 
   console.log(errors.length ? 'PAGE ERRORS:\n' + errors.join('\n') : 'no page errors');
   if (errors.length) failed++;
