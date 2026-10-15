@@ -1562,7 +1562,8 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
   // The owner gives one goal. One product then moves from role to role, each step building on the one before it:
   //   Concept > Research > Test 1 > Design > Build > Test 2 > Pricing > Operations > Outreach > Launch > Test 3 > Final package
   // (only the roles this crew has). At every test the Tester runs 30 simulated buyers. 16 or more yes votes let the product move on.
-  // Fewer sends it back to the role that owns that step, who tweaks it using the buyers' own objections, and it is tested again.
+  // Fewer sends it back to the role that owns that step, who tweaks it using the buyers' own objections, and it is tested again,
+  // as many times as it takes until a majority says yes (Pause stops it).
   // It all runs in this open tab, so closing the tab pauses it. "Resume autopilot" picks up where it stopped.
   const AUTO_TRIES = 2, MAX_TWEAKS = 4, BATCHES = 3, BATCH_N = 10;
   const AUTO_FATAL = ["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed", "session_expired"];
@@ -1929,7 +1930,6 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
           const stale = g && JSON.stringify(g.tests || []) !== JSON.stringify(ids);
           const tries = goalTasks(goalId).filter((y) => y.stage === s.key).length;
           if (!g || stale) {
-            if (g && tries >= maxTests) return { ok: false, stuck: true, s, tries };
             g = await addTask({
               agentId: s.agentId, kind: "test", stage: s.key, step: i, round: tries + 1, tests: ids, after: ids, plannedBy: before(i),
               title: s.label + ((tries + 1) > 1 ? " · try " + (tries + 1) : "") + ": 30 buyers vote", brief: "30 simulated buyers look at " + s.covers.map((k) => (stages.find((z) => z.key === k) || {}).label || k).join(", ") + " and each says whether they would buy. It passes with " + (Math.floor((BATCHES * BATCH_N) / 2) + 1) + " or more yes votes.",
@@ -1943,8 +1943,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
           if (!FINISHED(g) || !g.votes) { A.failed = { s, text: g && g.error }; return { ok: false }; }
           if (g.votes.pass) return { ok: true };
           // Not enough yes votes. The step's owner tweaks it using the buyers' objections, then the test runs again.
-          const tries2 = goalTasks(goalId).filter((y) => y.stage === s.key).length;
-          if (tries2 >= maxTests) return { ok: false, stuck: true, s, tries: tries2 };
+          // No limit: it keeps tweaking and re-testing until a majority says yes. Pause stops it at any time.
           const fs = stages.find((z) => z.key === s.fix), fi = idxOf(s.fix);
           let fx = latestOf(goalId, fs.key);
           if ((g.tests || []).includes(fx.id)) {

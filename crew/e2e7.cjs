@@ -170,21 +170,17 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok(ts.filter((t) => t.stage === 'concept').length === 1 && ts.filter((t) => t.stage === 'design').length === 1, 'only the build was redone, not the earlier steps');
   await ctx.close();
 
-  // ================= it never passes: stops after 5 tests, then Resume tries again
+  // ================= no limit: it keeps tweaking and re-testing until a majority says yes
   ({ page, ctx, errors } = await open(browser));
-  await start(page, null, [10, 10, 10, 10, 10]);
-  await waitStatus(page, /still hasn't won a majority/, 60000);
-  ok(/Test 1 still hasn't won a majority after 5 tries \(best: 10 of 30\)/.test(await status(page)), 'after 1 test and 4 tweaks it stops and says so: ' + (await status(page)).slice(0, 120));
-  ok((await goal(page)).status === 'stuck', 'the goal is marked stuck');
-  L = await log(page);
-  ok(!L.some((x) => x.label === 'Design') && L.filter((x) => x.label === 'Concept').length === 5, 'nothing after Test 1 ran, and the concept was tweaked 4 times');
-  ok(await page.evaluate(() => !document.querySelector('#autoResume').hidden), 'Resume autopilot is offered');
-  await page.evaluate(() => { window.__rounds[5] = 22; });
-  await page.click('#autoResume');
-  await waitStatus(page, /^Done\./, 60000);
-  ts = await tasks(page);
-  ok(ts.filter((t) => t.stage === 'test1').length === 6 && ts.find((t) => t.stage === 'test1' && t.round === 6).votes.pass, 'Resume gave it more tries and the sixth passed');
-  ok((await goal(page)).resumes === 1 && ts.find((t) => t.kind === 'final').status === 'review', 'and the relay carried on to the final package');
+  await start(page, null, [10, 10, 10, 10, 10, 10, 10, 12, 22]);
+  await waitStatus(page, /^Done\./, 120000);
+  ts = await tasks(page); L = await log(page);
+  const g1 = ts.filter((t) => t.stage === 'test1');
+  ok(g1.length === 9 && g1.find((t) => t.round === 9).votes.pass && g1.filter((t) => t.votes && !t.votes.pass).length === 8, 'it never gives up: 8 failed tests, 8 tweaks, the 9th passes');
+  ok(L.filter((x) => x.label === 'Concept').length === 9, 'the concept owner tweaked it 8 times');
+  const fd = L.findIndex((x) => x.label === 'Design'), lc = L.map((x) => x.label).lastIndexOf('Concept');
+  ok(fd > lc, 'Design only started once Test 1 passed');
+  ok((await goal(page)).status !== 'stuck' && ts.find((t) => t.kind === 'final').status === 'review', 'and the relay carried on to the final package');
   await ctx.close();
 
   // ================= Stop, then Resume, from the saved steps
