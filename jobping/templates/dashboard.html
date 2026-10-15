@@ -38,7 +38,7 @@
     <li><span class="f-ic">{{ icon('text') }}</span><span class="f-n">{{ stats.texted }}</span><span class="f-l">Texted back</span></li>
     <li><span class="f-ic">{{ icon('booked') }}</span><span class="f-n">{{ stats.booked }}</span><span class="f-l">Jobs booked</span></li>
   </ol>
-  <p class="fine">Last 7 days. <a href="{{ url_for('owner.report') }}">See the 30-day missed-call count</a>.</p>
+  <p class="fine">Last 7 days.{% if avg_reply %} Average text-back time: {{ avg_reply }}.{% endif %} <a href="{{ url_for('owner.report') }}">See the 30-day missed-call count</a>.</p>
 </section>
 
 <nav class="filters" aria-label="Filter customers">
@@ -55,12 +55,13 @@
     <a href="{{ url_for('owner.ticket', conv_id=t.id) }}">
       <span class="stub">{{ icon('warning' if urgent else glyphs[t.state]) }}<span>{{ 'Urgent' if urgent else labels[t.state] }}</span></span>
       <span class="ticket-body">
-        <span class="ticket-who"><strong>{{ t.name or (t.phone|phone) }}</strong>{% if t.name %} <span class="muted">{{ t.phone|phone }}</span>{% endif %}</span>
+        <span class="ticket-who"><strong>{{ t.name or (t.phone|phone) }}</strong>{% if t.name %} <span class="muted">{{ t.phone|phone }}</span>{% endif %}{% if t.past_jobs %} <span class="badge repeat">Repeat customer</span>{% endif %}</span>
         <span class="ticket-problem">{{ t.problem or ('Replied STOP. No more texts will be sent.' if t.opted_out else ('No details were given.' if t.state == 'closed' else 'No details yet. Waiting for a reply.')) }}</span>
         <span class="ticket-meta">
           <span class="meta-item">{{ icon('clock') }}{{ t.updated_at|ago }}</span>
-          {% if t.next_job %}<span class="meta-item">{{ icon('booked') }}Job {{ t.next_job|when }}</span>{% endif %}
-          {% if t.opted_out %}<span class="meta-item">Opted out of texts</span>{% endif %}
+          {% if t.next_job %}<span class="meta-item">{{ icon('booked') }}Job {{ t.next_job|when }}{% if t.next_address %} at {{ t.next_address }}{% endif %}</span>{% endif %}
+          {% if t.call_count > 1 %}<span class="meta-item">{{ icon('missed') }}Called {{ t.call_count }} times</span>{% endif %}
+          {% if t.opted_out %}<span class="meta-item warn">{{ icon('warning') }}Opted out of texts. Call instead.</span>{% endif %}
         </span>
       </span>
       <span class="ticket-go">{{ icon('next') }}</span>

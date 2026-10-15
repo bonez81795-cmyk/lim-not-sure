@@ -81,7 +81,10 @@ def dashboard():
 
     sql = (
         "SELECT c.id, c.state, c.reason, c.problem, c.updated_at, cu.name, cu.phone, cu.opted_out, "
-        "(SELECT starts_at FROM jobs j WHERE j.conversation_id=c.id AND j.status='booked' ORDER BY starts_at LIMIT 1) AS next_job "
+        "(SELECT starts_at FROM jobs j WHERE j.conversation_id=c.id AND j.status='booked' ORDER BY starts_at LIMIT 1) AS next_job, "
+        "(SELECT address FROM jobs j WHERE j.conversation_id=c.id AND j.status='booked' ORDER BY starts_at LIMIT 1) AS next_address, "
+        "(SELECT COUNT(*) FROM jobs j WHERE j.customer_id=c.customer_id AND j.status='done') AS past_jobs, "
+        "(SELECT COUNT(*) FROM calls k WHERE k.customer_id=c.customer_id) AS call_count "
         "FROM conversations c JOIN customers cu ON cu.id=c.customer_id WHERE c.business_id=?"
     )
     args = [biz["id"]]
@@ -114,6 +117,7 @@ def dashboard():
         for r in db.execute("SELECT starts_at FROM jobs WHERE business_id=? AND status='booked' AND starts_at>?", (biz["id"], iso(now - timedelta(days=1))))
         if parse(r["starts_at"]).astimezone(tz).date() == today
     ]
+    avg_seconds = _average_reply_seconds(db, biz, week_ago)
     return render_template(
         "dashboard.html",
         tickets=tickets,
@@ -121,10 +125,45 @@ def dashboard():
         filters=FILTERS,
         counts=counts,
         stats=stats,
+        avg_reply=_duration(avg_seconds) if avg_seconds is not None else None,
         now_iso=iso(now),
         needs=counts["needs"],
         today_jobs=len(today_jobs),
     )
+
+
+def _reply_seconds(db, text_row):
+    """Seconds from the missed call to this first text-back, or None if no call came first."""
+    call = db.execute(
+        "SELECT k.created_at FROM calls k JOIN conversations c ON c.customer_id=k.customer_id "
+        "WHERE c.id=? AND k.status='missed' AND k.created_at<=? ORDER BY k.created_at DESC LIMIT 1",
+        (text_row["conversation_id"], text_row["created_at"]),
+    ).fetchone()
+    if call is None:
+        return None
+    return max(0, int((parse(text_row["created_at"]) - parse(call["created_at"])).total_seconds()))
+
+
+def _average_reply_seconds(db, biz, since):
+    rows = db.execute(
+        "SELECT conversation_id, created_at FROM messages WHERE business_id=? AND kind='first_text' "
+        "AND status NOT LIKE 'blocked%' AND conversation_id IS NOT NULL AND created_at>?",
+        (biz["id"], since),
+    ).fetchall()
+    gaps = [s for s in (_reply_seconds(db, r) for r in rows) if s is not None]
+    return round(sum(gaps) / len(gaps)) if gaps else None
+
+
+def _duration(seconds):
+    """'40 seconds', '6 minutes', '2 hours': short enough to read at a glance."""
+    if seconds < 5:
+        return "a few seconds"
+    if seconds < 90:
+        return "%d seconds" % seconds
+    if seconds < 5400:
+        return "%d minutes" % round(seconds / 60)
+    hours = round(seconds / 3600)
+    return "%d hour%s" % (hours, "" if hours == 1 else "s")
 
 
 # ---------------------------------------------------------------- one customer
@@ -142,8 +181,26 @@ def ticket(conv_id):
     if conv["state"] == "awaiting_booking" and conv["pending_json"]:
         pending = json.loads(conv["pending_json"])
         pending_when = fmt_slot(parse(pending["start"]), tzinfo(g.biz))
+
+    past_jobs = db.execute(
+        "SELECT COUNT(*) FROM jobs WHERE customer_id=? AND status='done'", (conv["customer_id"],)
+    ).fetchone()[0]
+    call_total, call_missed = db.execute(
+        "SELECT COUNT(*), COALESCE(SUM(status='missed'), 0) FROM calls WHERE customer_id=?", (conv["customer_id"],)
+    ).fetchone()
+    first_text = next((m for m in messages if m["kind"] == "first_text" and not m["status"].startswith("blocked")), None)
+    reply_took = booked_took = None
+    if first_text is not None:
+        seconds = _reply_seconds(db, first_text)
+        reply_took = _duration(seconds) if seconds is not None else None
+        booked = next((j for j in reversed(jobs) if j["status"] != "cancelled"), None)
+        if booked is not None:
+            gap = int((parse(booked["created_at"]) - parse(first_text["created_at"])).total_seconds())
+            booked_took = _duration(max(0, gap))
     return render_template(
-        "ticket.html", conv=conv, messages=messages, jobs=jobs, calls=calls, pending=pending, pending_when=pending_when
+        "ticket.html", conv=conv, messages=messages, jobs=jobs, calls=calls, pending=pending, pending_when=pending_when,
+        past_jobs=past_jobs, call_total=call_total, call_missed=int(call_missed),
+        reply_took=reply_took, booked_took=booked_took,
     )
 
 

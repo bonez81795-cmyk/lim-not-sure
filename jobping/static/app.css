@@ -277,6 +277,9 @@ main.wrap { padding-top: 1.5rem; padding-bottom: 3rem; }  /* main.wrap: a bare `
 .ticket-meta { display: flex; align-items: center; gap: 0.15rem 1rem; font-size: 0.875rem; color: var(--muted); flex-wrap: wrap; }
 .meta-item { display: inline-flex; align-items: center; gap: 0.3rem; }
 .ticket-meta .ic { width: 1rem; height: 1rem; vertical-align: 0; }
+.meta-item.warn { color: var(--red-ink); font-weight: 700; }
+.badge { font-family: var(--body); font-size: 0.75rem; font-weight: 700; padding: 0.1rem 0.55rem; border-radius: 999px; vertical-align: middle; white-space: nowrap; }
+.badge.repeat { background: var(--green-bg); color: var(--green); }
 .ticket-go { display: flex; align-items: center; padding-right: 0.7rem; color: var(--muted); }
 
 /* One customer */
