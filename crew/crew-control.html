@@ -241,6 +241,9 @@ html.lenis, html.lenis body { height: auto; }
 .rs.fail { border-color: #8a3a52; color: #ffc2d1; }
 .rs.fail i { color: #ffc2d1; }
 .rs.todo { opacity: .8; }
+.rs.skip { border-color: #6b4a1a; color: #ffc48f; }
+.rs.skip::before { content: "\2192"; color: var(--gate); }
+.rs.skip i { color: #ffc48f; }
 @keyframes relayNow { 50% { box-shadow: 0 0 6px rgba(155,109,255,.25); } }
 .votebar { position: relative; height: 10px; border-radius: 99px; background: #3a1f33; overflow: hidden; border: 1px solid var(--line-2); }
 .votebar .y { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #1f9d6e, var(--ok)); }
@@ -576,6 +579,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
           <button class="btn small" type="button" id="vFocus" aria-pressed="false">Focus</button>
           <button class="btn small" type="button" id="autoStop" data-act="auto-stop" hidden>Stop autopilot</button>
           <button class="btn small primary" type="button" id="autoResume" data-act="auto-resume" hidden>Resume autopilot</button>
+          <button class="btn small" type="button" id="autoFinish" data-act="auto-finish" hidden title="Skip the buyer votes that are left and write the final package now, using the newest version of every step. The package says plainly that the votes were not won.">Finish now</button>
           <button class="btn small danger" type="button" id="autoCancel" data-act="auto-cancel" hidden title="Abandon this run for good. Steps that already finished are kept on the board.">Cancel autopilot</button>
         </div>
         <ol class="phases" id="phases" aria-label="Where the crew is">
@@ -1158,6 +1162,13 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     cb.hidden = !canCancel;
     cb.disabled = !!(S.auto && S.auto.cancel);
     cb.textContent = S.auto && S.auto.cancel ? "Cancelling…" : S.cancelArm ? "Confirm cancel" : "Cancel autopilot";
+    // Finish now skips the buyer votes that are left. It also needs a second click, and it is only offered while votes are still being run.
+    const cg = curGoal(), canFinish = canCancel && !(cg && cg.skipTests);
+    if (!canFinish) S.finishArm = false;
+    const fb = $("#autoFinish");
+    fb.hidden = !canFinish;
+    fb.disabled = !!(S.auto && (S.auto.cancel || S.auto.finish));
+    fb.textContent = S.auto && S.auto.finish ? "Finishing…" : S.finishArm ? "Confirm: skip votes" : "Finish now";
     if (S.auto) autoSay();
 
     // gate
@@ -1194,7 +1205,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
         h("div", { class: "col-h" }, h("b", { text: label }), h("span", { class: "n", text: items.length })),
         items.length ? items.slice(0, 40).map(card) : held.length ? null : h("p", { class: "empty-col", text: emptyColText(key) }),
         held.length ? h("details", { class: "held-group", open: S.heldOpen },
-          h("summary", { text: held.length + " supporting draft" + (held.length === 1 ? "" : "s") + " · covered by the package" }),
+          h("summary", { text: held.length + " supporting step" + (held.length === 1 ? "" : "s") + (held.some((x) => !S.tasks.some((y) => y.goalId === x.goalId && y.kind === "final")) ? " · nothing to review until the final package arrives" : " · covered by the package") }),
           held.map((x) => { const a = agentById(x.agentId); return h("button", { class: "held-row", type: "button", "data-act": "review", "data-id": x.id, c: a ? a.color : null }, h("span", { class: "dot", c: a ? a.color : null }), h("span", { class: "ttl", text: x.title }), h("span", { class: "who2", text: a ? a.name : "Removed agent" })); })) : null);
     }));
     const planned = t.filter((x) => (x.status === "planned" || x.status === "returned") && !x.pipe).length;
@@ -1231,8 +1242,14 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
       if (st === "todo" && S.auto && S.auto.goalId === g.id && S.auto.step === i) st = "now";
       if (s.kind === "test" && t && t.votes) sub = t.votes.yes + "/" + t.votes.total;
       else if (n > 1) sub = "try " + n;
-      const tip = s.label + (a ? " · " + a.name : "") + (t && t.votes ? " · " + t.votes.yes + " of " + t.votes.total + " buyers said yes, " + t.votes.need + " needed" : "");
-      return h("li", {}, h("button", { class: "rs " + st + (s.kind === "test" ? " test" : ""), type: "button", title: tip, "aria-label": tip + (st === "done" ? ", done" : st === "now" ? ", in progress" : st === "fail" ? ", did not pass yet" : ", waiting"), "aria-current": st === "now" ? "step" : null, "data-act": t ? "review" : null, "data-id": t ? t.id : null },
+      // A buyer test the owner skipped with Finish now: it shows as skipped, with the best vote it got.
+      if (s.kind === "test" && g.skipTests && !(t && t.votes && t.votes.pass) && !(t && t.status === "working")) {
+        st = "skip";
+        const best = Math.max(0, ...S.tasks.filter((x) => x.goalId === g.id && x.stage === s.key && x.votes).map((x) => x.votes.yes));
+        sub = best ? "best " + best + "/30" : "skipped";
+      }
+      const tip = s.label + (a ? " · " + a.name : "") + (st === "skip" ? " · skipped, the buyers did not pass it" : "") + (t && t.votes ? " · " + t.votes.yes + " of " + t.votes.total + " buyers said yes, " + t.votes.need + " needed" : "");
+      return h("li", {}, h("button", { class: "rs " + st + (s.kind === "test" ? " test" : ""), type: "button", title: tip, "aria-label": tip + (st === "done" ? ", done" : st === "now" ? ", in progress" : st === "fail" ? ", did not pass yet" : st === "skip" ? ", skipped" : ", waiting"), "aria-current": st === "now" ? "step" : null, "data-act": t ? "review" : null, "data-id": t ? t.id : null },
         s.label, sub ? h("i", { text: sub }) : null));
     }));
   }
@@ -1590,8 +1607,11 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
   function heldBack(x) {
     if (!x.auto || x.kind === "final" || x.status !== "review") return false;
     if (autoBusy(x)) return true;
+    // Held back even when autopilot isn't running in this tab (a reload, a stop, another device) and before the package exists:
+    // the owner only ever reviews the final package.
     const fin = S.tasks.find((y) => y.goalId === x.goalId && y.kind === "final");
-    return !!fin && fin.status !== "approved" && !(fin.status === "planned" && fin.error);
+    if (!fin) return true;
+    return fin.status !== "approved" && !(fin.status === "planned" && fin.error);
   }
 
   // ----- the route
@@ -1744,13 +1764,26 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     }
     const tests = testHistory(x.goalId, stages);
     const qaT = goalTasks(x.goalId).filter((y) => y.qa).sort((p, q) => (q.round || 1) - (p.round || 1))[0];
+    let skipText = "";
+    const gl = S.goals.find((y) => y.id === x.goalId);
+    if (gl && gl.skipTests) {
+      const lines = stages.filter((z) => z.kind === "test").map((z) => {
+        const all = goalTasks(x.goalId).filter((y) => y.stage === z.key && y.votes).sort((p, q) => (p.round || 1) - (q.round || 1));
+        const last = all[all.length - 1];
+        if (last && last.votes.pass) return z.label + ": passed (" + last.votes.yes + " of " + last.votes.total + " yes on try " + (last.round || 1) + ")";
+        if (last) return z.label + ": NOT passed. Best of " + all.length + " tries: " + Math.max(...all.map((y) => y.votes.yes)) + " of " + last.votes.total + " yes; the latest try got " + last.votes.yes + ". What the buyers still doubted: " + clip(last.digest || "", 900);
+        return z.label + ": not run. It was skipped at the owner's request.";
+      });
+      skipText = "\n\nTHE OWNER CHOSE TO FINISH WITHOUT WINNING THE BUYER VOTES. The page counted these results:\n" + lines.join("\n") +
+        "\nSay this plainly in the first paragraph of the package: the product did NOT win a majority of the simulated buyers at every test, with the numbers above. Do not call it validated. Then, before the three next steps, list the buyers' biggest unresolved doubts as the owner's to-do list.";
+    }
     const chk = latestOf(x.goalId, "check");
     const chkText = chk && FINISHED(chk) ? "\n\nTHE MANAGER'S CONSISTENCY CHECK, run before Test 3. FIX lines were sent back to the step's owner and are already fixed in the steps above. NOTE lines were not changed, so say them plainly to the owner:\n" + clip(chk.output, 1800) : "";
     return "You are " + a.name + ", the " + a.role + " on a small AI crew that has just built ONE product together, one role after another.\nYour standing instructions: " + (a.instructions || ROLES[a.role] || "Do excellent work in your role.") + "\n" + LIMITS +
       "\n\nThe owner's goal: " + (x.goalText || "(none)") +
       "\n\nTHE FINISHED STEPS, in order (each is the newest version, after any buyer-test tweaks):" + ctx +
       "\n\nBUYER TEST RESULTS. The page counted these votes. The buyers are simulated, so the yes counts are an upper bound.\n" + (tests || "(no tests recorded)") +
-      (qaT ? "\n\nThe Tester's quality check of the build:\n" + clip(qaT.qa, 1200) : "") + chkText +
+      (qaT ? "\n\nThe Tester's quality check of the build:\n" + clip(qaT.qa, 1200) : "") + chkText + skipText +
       "\n\nYOUR STEP: Final package. Write the one document the owner will review and approve. Open with a one-paragraph summary of the product and whether it won the buyers over. Then merge every step above into one consistent package: the concept, what it looks like, what was built (the built file is kept in the Build step, where the owner can copy it, so do not repeat the code), the price, how it runs on day one, how to win the first customers and the launch plan. Say which changes came from buyer tests. Point out any place where two steps disagree. End with the three next steps for the owner, in order. Use only what is in the steps above and never add facts, numbers or quotes." +
       (x.status === "returned" && x.output ? "\n\nYour previous draft:\n" + clip(x.output, 6000) + "\n\nThe owner sent it back with this note:\n" + (x.note || "(no note)") + "\nRevise the draft to address the note." : "") +
       "\n\nStart with the package itself, with no preamble. Use plain text with short headings and lists. End with a section that starts with the words \"Check before using:\" followed by a numbered list of everything the owner should verify, including that the buyer votes were simulated.\nThe draft is shown as plain text, so do not use markdown symbols such as ** or #. Write headings as plain lines and lists with hyphens.";
@@ -1875,9 +1908,10 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
 
   // ----- the relay engine
   // The state lives in the tasks, so a stopped relay (Stop, a closed tab, an error) can pick up exactly where it left off.
+  function curGoal() { return S.goals.filter((y) => y.mode === "pipeline").sort((p, q) => (q.createdAt || "").localeCompare(p.createdAt || ""))[0] || null; }
   function pendingAuto() {
     if (S.auto || S.planning || S.runningAll) return null;
-    const g = S.goals.filter((y) => y.mode === "pipeline").sort((p, q) => (q.createdAt || "").localeCompare(p.createdAt || ""))[0];
+    const g = curGoal();
     if (!g || !Array.isArray(g.stages) || !g.stages.length) return null;
     const fin = latestOf(g.id, "final");
     if (fin && (fin.status === "review" || fin.status === "approved" || fin.status === "working")) return null;
@@ -1891,6 +1925,15 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     A.cancel = true;
     autoStop();
     scheduleRender();
+  }
+  // Finish now: skip the buyer votes that are left. While the relay runs it is stopped cleanly and restarted in skip mode; when it is stopped it restarts straight away.
+  async function autoFinishNow() {
+    const A = S.auto;
+    if (A) { if (A.finish || A.cancel) return; A.finish = true; autoStop(); scheduleRender(); return; }
+    const gid = pendingAuto();
+    if (!gid) return;
+    const ok = await write(() => S.db.doc("goals/" + gid).update({ skipTests: true, updatedAt: nowIso() }), "Couldn't skip the votes. Try again.");
+    if (ok) autoRunGoal(gid, { skip: true });
   }
   async function cancelRelay(gid) {
     const ok = await write(() => S.db.doc("goals/" + gid).update({ status: "cancelled", cancelledAt: nowIso(), updatedAt: nowIso() }), "Couldn't cancel autopilot. Try again.");
@@ -1937,6 +1980,8 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
       if (g.status === "stuck") { resumes += 1; await mark("running", { resumes }); }
       else await mark("running");
       const maxTests = MAX_TWEAKS + 1 + MAX_TWEAKS * resumes;
+      // "Finish now": the buyer votes that are left are skipped and the relay carries on with the newest version of every step.
+      const skip = !!((hint && hint.skip) || g.skipTests);
       const N = stages.length;
       const say = (i, text) => { A.step = i; A.msg = "Step " + (i + 1) + " of " + N + " · " + text; autoSay(); };
       const wa = (s) => nameOf(agentById(s.agentId));
@@ -1987,6 +2032,13 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
         return true;
       };
       const ensureGate = async (s, i) => {
+        if (skip) {
+          // A test that already passed stays passed. Any other test is skipped, and its empty unfinished try is removed.
+          const g0 = latestOf(goalId, s.key);
+          if (g0 && g0.votes && g0.votes.pass) return { ok: true };
+          for (const y of goalTasks(goalId).filter((q) => q.stage === s.key && q.pipe && !q.output)) await S.db.doc("tasks/" + y.id).delete().catch(() => {});
+          return { ok: true, skipped: true };
+        }
         for (;;) {
           if (A.stopping || A.fatal) return { ok: false };
           const covered = s.covers.map((k) => latestOf(goalId, k));
@@ -2017,7 +2069,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
             fx = await addTask(makeData(fs, fi, (fx.round || 1) + 1, { revises: fx.id, feedbackFrom: g.id }));
           }
           if (fx.status === "planned" || fx.status === "returned") {
-            say(i, s.label + " got " + g.votes.yes + " of " + g.votes.total + " yes. " + wa(fs) + " is tweaking " + fs.label.toLowerCase() + " (try " + (fx.round || 2) + ")");
+            say(i, s.label + " got " + g.votes.yes + " of " + g.votes.total + " yes. " + wa(fs) + " is tweaking " + fs.label.toLowerCase() + " (try " + (fx.round || 2) + ")" + ((fx.round || 2) >= 4 ? ". Press Finish now to skip the votes" : ""));
             if (!(await attempt(fx.id, runTask))) { A.failed = { s: fs, text: (S.tasks.find((y) => y.id === fx.id) || {}).error }; return { ok: false }; }
           }
           const nx = latestOf(goalId, fs.key);
@@ -2085,6 +2137,12 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
       done = FINISHED(latestOf(goalId, "final"));
 
       if (A.stopping && A.cancel) { S.auto = null; await cancelRelay(goalId); return; }
+      if (A.stopping && A.finish) {
+        await mark("running", { skipTests: true });
+        stageStatus("Skipping the buyer votes that are left. Autopilot is carrying on to the final package…");
+        setTimeout(() => autoRunGoal(goalId, { skip: true }), 0);
+        return;
+      }
       if (A.stopping) { await mark("stopped"); stageStatus("Autopilot stopped at step " + (A.step + 1) + " of " + N + ". Press Resume autopilot to carry on."); return; }
       if (A.fatal) { await mark("stopped"); stageStatus(sampleCopy({ code: A.fatal }) + " Press Resume autopilot once that's fixed."); return; }
       if (A.stuck) {
@@ -2108,7 +2166,11 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     }
     if (done) {
       const tests = goalTasks(goalId).filter((y) => y.votes);
-      stageStatus("Done. The product passed all 3 buyer tests (" + tests.length + " tests in all) and the final package is waiting for your OK.");
+      const gl = S.goals.find((y) => y.id === goalId) || {};
+      if (gl.skipTests) {
+        const best = Math.max(0, ...tests.map((y) => y.votes.yes));
+        stageStatus("Done. You skipped the buyer votes, so this product did not win them" + (tests.length ? " (best result " + best + " of 30 yes)" : "") + ". The final package is waiting for your OK and says so.");
+      } else stageStatus("Done. The product passed all 3 buyer tests (" + tests.length + " tests in all) and the final package is waiting for your OK.");
     }
   }
   // Sending the final package back rewrites it straight away with the owner's note.
@@ -2589,6 +2651,13 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
         break;
       }
       case "auto-stop": autoStop(); break;
+      case "auto-finish": {
+        if (!S.finishArm) { S.finishArm = true; scheduleRender(); clearTimeout(S.finishT); S.finishT = setTimeout(() => { S.finishArm = false; scheduleRender(); }, 6000); break; }
+        S.finishArm = false; clearTimeout(S.finishT);
+        autoFinishNow();
+        scheduleRender();
+        break;
+      }
       case "auto-cancel": {
         if (!S.cancelArm) { S.cancelArm = true; scheduleRender(); clearTimeout(S.cancelT); S.cancelT = setTimeout(() => { S.cancelArm = false; scheduleRender(); }, 6000); break; }
         S.cancelArm = false; clearTimeout(S.cancelT);

@@ -116,6 +116,7 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok(/CONSISTENCY CHECK, run before Test 3/.test(fp) && /VERDICT: CONSISTENT/.test(fp), 'the final package is told what the check found');
   ok((await goal(page)).status === 'ready', 'the goal is ready');
   ok(await page.evaluate(() => document.querySelector('#autoCancel').hidden), 'a finished relay has nothing to cancel');
+  ok(await page.evaluate(() => document.querySelector('#autoFinish').hidden), 'a finished relay has nothing to finish');
   ok(ts.filter((t) => t.kind !== 'final').every((t) => t.status === 'review' && t.pipe && t.auto), 'nothing is approved: every step waits behind the final package');
   ok(await page.evaluate(() => document.querySelectorAll('#gateList .gate-item.final').length === 1 && document.querySelectorAll('#gateList .gate-item').length === 4), 'the gate shows only the final package (3 older drafts + 1)');
   ok(await page.evaluate(() => [...document.querySelectorAll('#relay .rs')].every((b) => b.classList.contains('done'))), 'every step in the relay is ticked');
@@ -205,7 +206,7 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
 
   // ================= Stop during the fixes, then Resume: the check is not repeated and no fix is made twice
   ({ page, ctx, errors } = await open(browser));
-  await page.evaluate(() => { window.__delay = 40; window.__checkReply = 'VERDICT: CONFLICTS FOUND\nFIX pricing: wrong price.\nFIX launch: wrong promise.'; });
+  await page.evaluate(() => { window.__delay = 250; window.__checkReply = 'VERDICT: CONFLICTS FOUND\nFIX pricing: wrong price.\nFIX launch: wrong promise.'; });
   await start(page);
   await page.waitForFunction(() => window.__log.some((l) => l.fix), null, { timeout: 30000 });
   await page.click('#autoStop');
@@ -232,6 +233,7 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok((await goal(page)).status === 'cancelled', 'the goal is marked cancelled');
   ok(!ts.some((t) => t.status === 'working') && !ts.some((t) => t.pipe && !t.output), 'nothing is left running and no empty unfinished step is left on the board');
   ok(ts.some((t) => t.stage === 'concept' && t.output) && ts.some((t) => t.stage === 'research' && t.output), 'steps that already finished are kept');
+  await page.waitForFunction(() => document.querySelector('#relay').hidden && document.querySelector('#autoCancel').hidden, null, { timeout: 3000 }).catch(() => {});
   ok(await page.evaluate(() => document.querySelector('#autoResume').hidden && document.querySelector('#autoCancel').hidden && document.querySelector('#autoStop').hidden && document.querySelector('#relay').hidden), 'Resume, Stop, Cancel and the relay strip are all gone');
   ok(await page.evaluate(() => !document.querySelector('#briefBtn').disabled && !document.querySelector('#goal').disabled), 'the manager can be briefed again');
   const calls = await page.evaluate(() => window.__log.length);
@@ -265,6 +267,47 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok(!(await tasks(page)).some((t) => t.pipe && !t.output), 'its empty unfinished steps are removed');
   await ctx.close();
 
+  // ================= Finish now: skip the buyer votes that are left and get the final package
+  ({ page, ctx, errors } = await open(browser));
+  await page.evaluate(() => { window.__delay = 60; window.__rounds = Array(80).fill(8); });
+  await start(page);
+  await page.waitForFunction(() => window.__batchCalls >= 9, null, { timeout: 60000 });
+  ok(await page.evaluate(() => !document.querySelector('#autoFinish').hidden && /Finish now/.test(document.querySelector('#autoFinish').textContent)), 'Finish now is offered while the buyer tests run');
+  await page.click('#autoFinish');
+  await page.waitForTimeout(150);
+  ok(/Confirm/.test(await page.evaluate(() => document.querySelector('#autoFinish').textContent)) && !(await goal(page)).skipTests, 'the first click only asks to confirm');
+  await page.click('#autoFinish');
+  await waitStatus(page, /^Done\./, 90000);
+  L = await log(page); ts = await tasks(page);
+  ok((await goal(page)).skipTests === true, 'the goal remembers the votes were skipped');
+  const gt = ts.filter((t) => t.kind === 'test');
+  ok(gt.every((t) => t.stage === 'test1' && t.votes && !t.votes.pass) && gt.length >= 3, 'Test 1 kept its failed tries and nothing else was tested: ' + gt.length + ' tries, no Test 2 or Test 3, no empty test left over');
+  ok(['design', 'build', 'pricing', 'operations', 'outreach', 'launch'].every((k) => ts.filter((t) => t.stage === k).length === 1) && L.filter((x) => x.kind === 'check').length === 1, 'every later step still ran once, in order, with the consistency check');
+  const fin2 = ts.find((t) => t.kind === 'final');
+  ok(fin2 && fin2.status === 'review', 'the final package was written');
+  const fp3 = L[L.length - 1].prompt;
+  ok(/THE OWNER CHOSE TO FINISH WITHOUT WINNING THE BUYER VOTES/.test(fp3) && /Test 1: NOT passed\. Best of \d+ tries: 8 of 30/.test(fp3) && /Test 2: not run/.test(fp3) && /Test 3: not run/.test(fp3) && /did NOT win a majority/.test(fp3), 'the final package is told to say plainly that the votes were not won');
+  ok(/did not win them \(best result 8 of 30 yes\)/.test(await status(page)), 'the done message says so too: ' + (await status(page)).slice(0, 140));
+  ok(await page.evaluate(() => { const t = [...document.querySelectorAll('#relay .rs.test')]; return t.length === 3 && t.every((b) => b.classList.contains('skip')) && /best 8\/30/.test(t[0].textContent) && /skipped/.test(t[1].textContent) && document.querySelectorAll('#relay .rs.fail').length === 0; }), 'the three test chips show as skipped, with the best vote');
+  ok(await page.evaluate(() => document.querySelector('#autoFinish').hidden && document.querySelectorAll('#gateList .gate-item.final').length === 1), 'the gate shows the final package, and Finish now is gone');
+  ok(await page.evaluate(() => { const g = document.querySelector('#board .held-group summary'); return !!g && /covered by the package/.test(g.textContent); }), 'the steps are tucked away behind the package');
+  ok(errors.length === 0, 'no page errors after Finish now' + (errors.length ? ': ' + errors.join(' | ') : ''));
+  await ctx.close();
+
+  // ================= Finish now also works on a stopped run
+  ({ page, ctx, errors } = await open(browser));
+  await page.evaluate(() => { window.__delay = 100; window.__rounds = Array(80).fill(8); });
+  await start(page);
+  await page.waitForFunction(() => window.__batchCalls >= 6, null, { timeout: 60000 });
+  await page.click('#autoStop');
+  await waitStatus(page, /^Autopilot stopped at step/);
+  await page.waitForFunction(() => !document.querySelector('#autoResume').hidden && !document.querySelector('#autoFinish').hidden, null, { timeout: 3000 });
+  await page.click('#autoFinish'); await page.click('#autoFinish');
+  await waitStatus(page, /^Done\./, 90000);
+  ts = await tasks(page);
+  ok((await goal(page)).skipTests === true && ts.find((t) => t.kind === 'final').status === 'review' && !ts.some((t) => t.kind === 'test' && !t.votes), 'Finish now on a stopped run restarts it and finishes with the final package');
+  ctx.close && await ctx.close();
+
   // ================= no limit: it keeps tweaking and re-testing until a majority says yes
   ({ page, ctx, errors } = await open(browser));
   await start(page, null, [10, 10, 10, 10, 10, 10, 10, 12, 22]);
@@ -289,6 +332,8 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok((await goal(page)).status === 'stopped' && !(await tasks(page)).some((t) => t.status === 'working'), 'Stop leaves nothing running');
   await page.waitForFunction(() => !document.querySelector('#autoResume').hidden, null, { timeout: 3000 }).catch(() => {});
   ok(await page.evaluate(() => !document.querySelector('#autoResume').hidden && document.querySelector('#autoStop').hidden), 'Resume appears and Stop hides');
+  ok(await page.evaluate(() => { const cards = [...document.querySelectorAll('#board .col.review .card')]; const g = document.querySelector('#board .held-group summary'); return cards.every((c) => !/Concept|Research|Test 1/.test(c.textContent)) && !!g && /nothing to review until the final package arrives/.test(g.textContent); }), 'while stopped and before the final package, the steps are tucked into one closed group and none ask for your OK');
+  ok(await page.evaluate(() => { const n = +document.querySelector('#board .col.review .col-h .n').textContent; return n === document.querySelectorAll('#board .col.review .card').length; }), 'the Needs your OK count only counts what you can review');
   await page.evaluate(() => { window.__delay = 30; });
   await page.click('#autoResume');
   await waitStatus(page, /^Done\./);
