@@ -1394,6 +1394,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
   }
   function taskPrompt(x, a) {
     if (x.pipe && x.kind === "make") return relayPrompt(x, a);
+    if (x.pipe && x.kind === "check") return checkPrompt(x, a);
     if (x.pipe && x.kind === "final") return pipeFinalPrompt(x, a);
     const owner = (y) => { const ya = agentById(y.agentId); return ya ? ya.name : "a teammate"; };
     const same = S.tasks.filter((y) => y.goalId && y.goalId === x.goalId && y.id !== x.id && y.output);
@@ -1627,6 +1628,8 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     if (mkt) seg.push(mk("launch", "Launch", mkt)); else if (!seg.length) seg.push(mk("launch", "Launch plan", mgr));
     st.push(...seg);
     const last = seg[seg.length - 1];
+    // Before the last buyer test the Manager reads every finished step against the concept and flags anything that disagrees.
+    st.push({ key: "check", kind: "check", label: "Consistency check", agentId: mgr.id });
     st.push({ key: "test3", kind: "test", label: "Test 3", agentId: tester.id, covers: st.filter((s) => s.kind === "make" && !["research", "operations", "outreach"].includes(s.key)).map((s) => s.key), fix: last.key });
     st.push({ key: "final", kind: "final", label: "Final package", agentId: mgr.id });
     return { stages: st };
@@ -1669,7 +1672,11 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     let revise = "";
     if (x.revises) {
       const prev = S.tasks.find((y) => y.id === x.revises), fb = S.tasks.find((y) => y.id === x.feedbackFrom);
-      if (prev && fb && fb.votes) {
+      if (prev && fb && fb.kind === "check") {
+        revise = "\n\nTHE MANAGER'S CONSISTENCY CHECK FOUND A PROBLEM in your step. Your previous version:\n" + clip(prev.output || "", 6000) +
+          "\n\nWhat the Manager found:\n" + clip(x.problem || fb.output || "", 1500) +
+          "\n\nFix this so your step agrees with the concept and the other steps, without losing what already works. Start your reply with a section called WHAT CHANGED that lists each change and the conflict it answers. Then give the complete revised " + s.label.toLowerCase() + ".";
+      } else if (prev && fb && fb.votes) {
         revise = "\n\nTHE BUYER TEST FAILED. Your previous version of this step:\n" + clip(prev.output || "", s.key === "build" ? 14000 : 6000) +
           "\n\nThe Tester's " + fb.votes.total + " simulated buyers voted " + fb.votes.yes + " yes. It needs " + fb.votes.need + ". Their verdict:\n" + clip(fb.digest || fb.output || "", 3500) +
           "\n\nTweak this step to win the buyers over without losing what already works. Start your reply with a section called WHAT CHANGED that lists each change and the buyer doubt it answers. Then give the complete revised " + s.label.toLowerCase() + (s.key === "build" ? " (the whole file, not a patch)" : "") + ".";
@@ -1686,6 +1693,38 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
       "\n\nWrite the finished deliverable now. Start with the deliverable itself, with no preamble. Use plain text with short headings and lists where they help. End with a short line starting \"Check before using:\" listing anything the owner should verify, or \"Check before using: nothing\"." +
       "\nThe draft is shown as plain text, so do not use markdown symbols such as ** or #. Write headings as plain lines and lists with hyphens. Keep any code in indented blocks.";
   }
+  // The steps the Manager may still send back for a fix: the ones after Test 2 and before the check. Concept, Design and Build already
+  // won a buyer vote, so the crew does not rewrite them now. A conflict in those is noted for the later steps and the owner instead.
+  const fixableFor = (stages, idx) => { const t2 = stages.findIndex((z) => z.key === "test2"); return stages.filter((z, j) => z.kind === "make" && j > t2 && j < idx); };
+  function parseFixes(text, fixable) {
+    const found = new Map();
+    for (const m of String(text || "").matchAll(/^[\s\-*]*FIX\s+([A-Za-z0-9 _]+?)\s*[:\-–—]\s*(.+)$/gim)) {
+      const k = m[1].trim().toLowerCase(), z = fixable.find((q) => q.key === k || q.label.toLowerCase() === k);
+      if (!z) continue;
+      found.set(z.key, { stage: z, problem: ((found.get(z.key) || {}).problem ? found.get(z.key).problem + " " : "") + m[2].trim() });
+    }
+    return fixable.filter((z) => found.has(z.key)).map((z) => ({ stage: z, problem: clip(found.get(z.key).problem, 800) }));
+  }
+  function checkPrompt(x, a) {
+    const stages = stagesOf(x.goalId), idx = Math.max(0, stages.findIndex((z) => z.key === x.stage));
+    const fixable = fixableFor(stages, idx);
+    let ctx = "";
+    for (const z of stages.slice(0, idx).filter((q) => q.kind === "make")) {
+      const t = latestOf(x.goalId, z.key);
+      if (!FINISHED(t)) continue;
+      ctx += "\n### " + z.label + " (key: " + z.key + ", by " + nameOf(agentById(t.agentId)) + ")\n" + clip(stripCode(t.output), BUDGET[z.key] || 2500) + "\n";
+    }
+    const hist = testHistory(x.goalId, stages.slice(0, idx));
+    return "You are " + a.name + ", the " + a.role + " on a small AI crew that is building ONE product together, one role after another.\nYour standing instructions: " + (a.instructions || ROLES[a.role] || "Do excellent work in your role.") + "\n" + LIMITS +
+      "\n\nThe owner's goal: " + (x.goalText || "(none)") +
+      "\n\nTHE FINISHED STEPS, in order (each is the newest version):" + ctx +
+      (hist ? "\n\nWhat the simulated buyers said so far:\n" + hist : "") +
+      "\n\nYOUR STEP: Consistency check. Before the last buyer test, read every step above against the concept and against each other. The concept, as it passed Test 1, is the source of truth. Look only for real contradictions: the product name, who it is for, the promise, the price and how it is sold, the features in version 1, and any number, claim or guarantee that disagrees with another step. Do not nitpick wording or style and do not add new ideas." +
+      "\n\nReply in exactly this shape. First line: VERDICT: CONSISTENT or VERDICT: CONFLICTS FOUND. Then one line per conflict:\n" +
+      (fixable.length ? "FIX <key>: what disagrees, which step it contradicts, and what it should say. Use this for a step the owner can still fix. The keys you may use are: " + fixable.map((z) => z.key).join(", ") + ".\n" : "") +
+      "NOTE <step name>: what disagrees. Use this for a conflict in Concept, Design or Build, which already won a buyer vote and will not be rewritten now. Say what the later steps and the owner should follow instead.\n" +
+      "Write nothing else. If everything agrees, write only the VERDICT line. Plain text, no markdown symbols, and never invent a conflict.";
+  }
   function pipeFinalPrompt(x, a) {
     const stages = stagesOf(x.goalId);
     let ctx = "";
@@ -1697,11 +1736,13 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     }
     const tests = testHistory(x.goalId, stages);
     const qaT = goalTasks(x.goalId).filter((y) => y.qa).sort((p, q) => (q.round || 1) - (p.round || 1))[0];
+    const chk = latestOf(x.goalId, "check");
+    const chkText = chk && FINISHED(chk) ? "\n\nTHE MANAGER'S CONSISTENCY CHECK, run before Test 3. FIX lines were sent back to the step's owner and are already fixed in the steps above. NOTE lines were not changed, so say them plainly to the owner:\n" + clip(chk.output, 1800) : "";
     return "You are " + a.name + ", the " + a.role + " on a small AI crew that has just built ONE product together, one role after another.\nYour standing instructions: " + (a.instructions || ROLES[a.role] || "Do excellent work in your role.") + "\n" + LIMITS +
       "\n\nThe owner's goal: " + (x.goalText || "(none)") +
       "\n\nTHE FINISHED STEPS, in order (each is the newest version, after any buyer-test tweaks):" + ctx +
       "\n\nBUYER TEST RESULTS. The page counted these votes. The buyers are simulated, so the yes counts are an upper bound.\n" + (tests || "(no tests recorded)") +
-      (qaT ? "\n\nThe Tester's quality check of the build:\n" + clip(qaT.qa, 1200) : "") +
+      (qaT ? "\n\nThe Tester's quality check of the build:\n" + clip(qaT.qa, 1200) : "") + chkText +
       "\n\nYOUR STEP: Final package. Write the one document the owner will review and approve. Open with a one-paragraph summary of the product and whether it won the buyers over. Then merge every step above into one consistent package: the concept, what it looks like, what was built (the built file is kept in the Build step, where the owner can copy it, so do not repeat the code), the price, how it runs on day one, how to win the first customers and the launch plan. Say which changes came from buyer tests. Point out any place where two steps disagree. End with the three next steps for the owner, in order. Use only what is in the steps above and never add facts, numbers or quotes." +
       (x.status === "returned" && x.output ? "\n\nYour previous draft:\n" + clip(x.output, 6000) + "\n\nThe owner sent it back with this note:\n" + (x.note || "(no note)") + "\nRevise the draft to address the note." : "") +
       "\n\nStart with the package itself, with no preamble. Use plain text with short headings and lists. End with a section that starts with the words \"Check before using:\" followed by a numbered list of everything the owner should verify, including that the buyer votes were simulated.\nThe draft is shown as plain text, so do not use markdown symbols such as ** or #. Write headings as plain lines and lists with hyphens.";
@@ -1905,7 +1946,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
         return S.tasks.find((y) => y.id === (t && t.id)) || t;
       };
       const makeData = (s, i, round, extra) => ({
-        agentId: s.agentId, kind: "make", stage: s.key, step: i, round, plannedBy: round > 1 ? stages.find((z) => z.kind === "test" && z.fix === s.key).agentId : before(i),
+        agentId: s.agentId, kind: "make", stage: s.key, step: i, round, plannedBy: round > 1 ? (stages.find((z) => z.kind === "test" && z.fix === s.key) || { agentId: mgr.id }).agentId : before(i),
         title: s.label + (round > 1 ? " · try " + round : "") + ": " + clip(goalText, 64), brief: clip(STAGE_ASK[s.key] || "", 600), after: [], ...extra,
       });
 
@@ -1963,6 +2004,38 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
           }
         }
       };
+      // The Manager reads every finished step against the concept. Each step it flags (after Test 2) goes back to its owner once to be fixed.
+      const ensureCheck = async (s, i) => {
+        say(i, "Consistency check · " + wa(s) + " is reading every step against the concept");
+        if (stages.some((z, j) => j < i && z.kind === "make" && !FINISHED(latestOf(goalId, z.key)))) { A.failed = { s, text: "a step before it isn't finished" }; return false; }
+        let c = await resetStale(latestOf(goalId, "check"));
+        if (!c) c = await addTask({ agentId: s.agentId, kind: "check", stage: "check", step: i, round: 1, plannedBy: before(i), title: "Consistency check: " + clip(goalText, 64), brief: "The Manager reads every finished step against the concept and flags anything that disagrees.", after: [] });
+        if (c.status === "planned" || c.status === "returned") {
+          if (!(await attempt(c.id, runTask))) { A.failed = { s, text: (S.tasks.find((y) => y.id === c.id) || {}).error }; return false; }
+        }
+        c = latestOf(goalId, "check");
+        if (!FINISHED(c)) { A.failed = { s, text: c && c.error }; return false; }
+        for (const f of parseFixes(c.output, fixableFor(stages, i))) {
+          const fs = f.stage, fi = idxOf(fs.key);
+          let fx = goalTasks(goalId).find((y) => y.stage === fs.key && y.feedbackFrom === c.id);
+          if (!fx) {
+            const base = latestOf(goalId, fs.key);
+            say(i, wa(s) + " flagged " + fs.label.toLowerCase() + ". " + wa(fs) + " is fixing it");
+            fx = await addTask(makeData(fs, fi, (base.round || 1) + 1, { revises: base.id, feedbackFrom: c.id, problem: f.problem, plannedBy: s.agentId }));
+          }
+          if (fx.status === "planned" || fx.status === "returned") {
+            say(i, wa(s) + " flagged " + fs.label.toLowerCase() + ". " + wa(fs) + " is fixing it (try " + (fx.round || 2) + ")");
+            if (!(await attempt(fx.id, runTask))) { A.failed = { s: fs, text: (S.tasks.find((y) => y.id === fx.id) || {}).error }; return false; }
+          }
+          const nx = S.tasks.find((y) => y.id === fx.id);
+          if (!FINISHED(nx)) { A.failed = { s: fs, text: nx && nx.error }; return false; }
+          if (!nx.changes) {
+            const m = /WHAT CHANGED[:\s]*([\s\S]*?)(?:\n\s*\n|$)/i.exec(nx.output || "");
+            await S.db.doc("tasks/" + nx.id).update({ changes: clip((m && m[1].trim()) || (nx.output || "").slice(0, 400), 600) }).catch(() => {});
+          }
+        }
+        return true;
+      };
       const ensureFinal = async (s, i) => {
         say(i, "Final package · " + wa(s) + " is merging everything");
         let t = await resetStale(latestOf(goalId, "final"));
@@ -1980,6 +2053,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
       for (let i = 0; i < N && !A.stopping && !A.fatal && !A.stuck && !A.failed; i++) {
         const s = stages[i];
         if (s.kind === "make") await ensureMake(s, i);
+        else if (s.kind === "check") await ensureCheck(s, i);
         else if (s.kind === "test") { const r = await ensureGate(s, i); if (r.stuck) A.stuck = r; }
         else if (!(await ensureFinal(s, i))) { /* A.failed is set */ }
       }

@@ -12,11 +12,12 @@ function fakeClaude() {
     let kind = 'make', label = '';
     if (/running a buyer panel/.test(prompt)) kind = 'batch';
     else if (/Do not recount/.test(prompt)) kind = 'digest';
+    else if (/YOUR STEP: Consistency check/.test(prompt)) { kind = 'check'; label = 'Consistency check'; }
     else if (/doing the quality check/.test(prompt)) kind = 'qa';
     else if (/YOUR STEP: Final package/.test(prompt)) { kind = 'final'; label = 'Final package'; }
     else { const m = /YOUR STEP: ([A-Za-z ]+?)\. /.exec(prompt); label = m ? m[1] : (/Your task: (.*)\n/.exec(prompt) || [0, '?'])[1]; }
     const who = (/^You are ([^,]+),/.exec(prompt) || [0, '?'])[1];
-    const entry = { kind, label, who, prompt, revise: /THE BUYER TEST FAILED/.test(prompt), active: window.__active + 1, t: Date.now() };
+    const entry = { kind, label, who, prompt, revise: /THE BUYER TEST FAILED/.test(prompt), fix: /CONSISTENCY CHECK FOUND A PROBLEM/.test(prompt), active: window.__active + 1, t: Date.now() };
     window.__log.push(entry);
     window.__active++; window.__maxActive = Math.max(window.__maxActive, window.__active);
     try {
@@ -31,10 +32,11 @@ function fakeClaude() {
         entry.round = round; entry.yes = [y0, y1, y2][b];
         text = JSON.stringify(buyers(10, entry.yes));
       } else if (kind === 'digest') text = 'Main reasons for no: the price is too high (most buyers).\nWhat would change their minds: a lower price.\nThree changes: lower the price, say what is included, add a guarantee.';
+      else if (kind === 'check') text = window.__checkReply || 'VERDICT: CONSISTENT';
       else if (kind === 'qa') text = 'Quality check: nothing is broken. One confusing label. Run the form test for real.';
       else {
         const n = window.__log.filter((l) => l.label === label && (l.kind === 'make' || l.kind === 'final')).length;
-        text = (entry.revise ? 'WHAT CHANGED:\n- tweak ' + n + ': lowered the price to answer the price doubt\n\n' : '') + 'Output of ' + label + ' try ' + n + '.\n' +
+        text = (entry.revise || entry.fix ? 'WHAT CHANGED:\n- tweak ' + n + ': lowered the price to answer the price doubt\n\n' : '') + 'Output of ' + label + ' try ' + n + '.\n' +
           (label === 'Build' ? '<!doctype html><html><body>Site for JobPing</body></html>\n' : '') + 'Check before using: nothing';
       }
       if (opts && opts.onText) opts.onText({ text });
@@ -58,7 +60,7 @@ async function open(browser, o = {}) {
 const status = (page) => page.evaluate(() => document.querySelector('#stageStatus').textContent);
 const waitStatus = (page, re, ms) => page.waitForFunction((src) => new RegExp(src).test(document.querySelector('#stageStatus').textContent), re.source, { timeout: ms || 40000 });
 const tasks = (page) => page.evaluate(() => Object.entries(window.__store.tasks).map(([id, t]) => ({ id, ...t })).filter((t) => t.goalId));
-const log = (page) => page.evaluate(() => window.__log.map((l) => ({ kind: l.kind, label: l.label, who: l.who, revise: l.revise, active: l.active, prompt: l.prompt })));
+const log = (page) => page.evaluate(() => window.__log.map((l) => ({ kind: l.kind, label: l.label, who: l.who, revise: l.revise, fix: l.fix, active: l.active, prompt: l.prompt })));
 const goal = (page) => page.evaluate(() => Object.values(window.__store.goals)[0]);
 async function start(page, text, rounds) {
   if (rounds) await page.evaluate((r) => { window.__rounds = r; }, rounds);
@@ -75,8 +77,8 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok(await page.evaluate(() => document.querySelector('#autoSw').checked), 'Autopilot is on by default');
   await start(page);
   await page.waitForTimeout(400);
-  ok(/set the route: Concept > Research > Test 1 > Design > Build > Test 2 > Pricing > Operations > Outreach > Launch > Test 3 > Final package/.test(await status(page)) || /Autopilot/.test(await status(page)), 'the manager sets one route through the roles: ' + (await status(page)).slice(0, 150));
-  ok(await page.evaluate(() => !document.querySelector('#relay').hidden && document.querySelectorAll('#relay .rs').length === 12), 'the relay strip shows all 12 steps');
+  ok(/set the route: Concept > Research > Test 1 > Design > Build > Test 2 > Pricing > Operations > Outreach > Launch > Consistency check > Test 3 > Final package/.test(await status(page)) || /Autopilot/.test(await status(page)), 'the manager sets one route through the roles: ' + (await status(page)).slice(0, 150));
+  ok(await page.evaluate(() => !document.querySelector('#relay').hidden && document.querySelectorAll('#relay .rs').length === 13), 'the relay strip shows all 13 steps, including the consistency check');
   await waitStatus(page, /^Done\./);
   let L = await log(page);
   ok(JSON.stringify(seq(L)) === JSON.stringify(['Concept', 'Research', 'Design', 'Build', 'Pricing', 'Operations', 'Outreach', 'Launch', 'Final package']), 'the roles work one after another in order: ' + seq(L).join(' > '));
@@ -87,7 +89,7 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   // the tester was called at three points in the sequence
   const order = L.map((x) => x.kind === 'batch' ? 'B' : x.kind === 'digest' ? 'D' : x.kind === 'qa' ? 'Q' : x.label[0]).join('');
   const gates = (L.map((x, i) => (x.kind === 'batch' && (i === 0 || L[i - 1].kind !== 'batch') ? L[i - 1].label : null)).filter(Boolean));
-  ok(JSON.stringify(gates) === JSON.stringify(['Research', 'Build', 'Launch']), 'the three tests come after Research, after Build and after Launch: ' + gates.join(', '));
+  ok(JSON.stringify(gates) === JSON.stringify(['Research', 'Build', 'Consistency check']), 'the three tests come after Research, after Build and after the consistency check: ' + gates.join(', '));
   const pr = (label) => L.find((x) => x.label === label && x.kind === 'make').prompt;
   ok(pr('Research').includes('Output of Concept try 1') && pr('Design').includes('Output of Concept try 1') && pr('Design').includes('Output of Research try 1'), 'Research and Design are given the concept (and the research) so it is one product');
   ok(pr('Build').includes('Output of Design try 1') && pr('Build').includes('Output of Concept try 1') && /THE PRODUCT SO FAR/.test(pr('Build')), 'Build is given everything before it');
@@ -103,15 +105,21 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok(votes[1].qa && /Quality check/.test(votes[1].output), 'Test 2 includes the Tester\'s quality check of the build');
   ok(/RESULT: PASSED\. 30 of 30 simulated buyers would buy \(100%\)\. It needs 16\./.test(votes[0].output) && /BY BUYING STYLE/.test(votes[0].output) && /upper bound/.test(votes[0].output), 'the report says the result, who said yes by buying style, and that simulated yes votes are an upper bound');
   const fin = ts.find((t) => t.kind === 'final');
-  ok(fin && fin.status === 'review' && fin.agentId === 'a0' && fin.after.length === 11, 'the manager wrote one final package from the latest of all 11 earlier steps');
+  ok(fin && fin.status === 'review' && fin.agentId === 'a0' && fin.after.length === 12, 'the manager wrote one final package from the latest of all 12 earlier steps');
   const fp = L[L.length - 1].prompt;
   ok(/BUYER TEST RESULTS/.test(fp) && /Test 3: try 1 got 30 of 30 yes/.test(fp) && /quality check/i.test(fp) && fp.includes('Output of Launch try 1') && fp.includes('Output of Concept try 1'), 'the final package is built from every step plus the test results');
+  const chkRuns = L.filter((x) => x.kind === 'check');
+  const firstB3 = L.findIndex((x, i) => x.kind === 'batch' && L.slice(0, i).filter((y) => y.kind === 'batch').length === 6);
+  ok(chkRuns.length === 1 && chkRuns[0].who === 'Nova' && L.indexOf(chkRuns[0]) < firstB3 && L.indexOf(chkRuns[0]) > L.findIndex((x) => x.label === 'Launch'), 'the Manager (Nova) ran one consistency check, after Launch and before Test 3');
+  ok(/Output of Concept try 1/.test(chkRuns[0].prompt) && /Output of Launch try 1/.test(chkRuns[0].prompt) && /FIX <key>/.test(chkRuns[0].prompt) && /keys you may use are: pricing, operations, outreach, launch/.test(chkRuns[0].prompt), 'the check reads every step and may only send back the steps after Test 2');
+  ok(['pricing', 'operations', 'outreach', 'launch', 'design', 'build'].every((k) => ts.filter((t) => t.stage === k).length === 1), 'a clean verdict changes nothing');
+  ok(/CONSISTENCY CHECK, run before Test 3/.test(fp) && /VERDICT: CONSISTENT/.test(fp), 'the final package is told what the check found');
   ok((await goal(page)).status === 'ready', 'the goal is ready');
   ok(ts.filter((t) => t.kind !== 'final').every((t) => t.status === 'review' && t.pipe && t.auto), 'nothing is approved: every step waits behind the final package');
   ok(await page.evaluate(() => document.querySelectorAll('#gateList .gate-item.final').length === 1 && document.querySelectorAll('#gateList .gate-item').length === 4), 'the gate shows only the final package (3 older drafts + 1)');
   ok(await page.evaluate(() => [...document.querySelectorAll('#relay .rs')].every((b) => b.classList.contains('done'))), 'every step in the relay is ticked');
   ok(await page.evaluate(() => /30\/30/.test(document.querySelector('#relay .rs.test i').textContent) && document.querySelectorAll('#relay .rs.test').length === 3), 'the three test chips show their votes');
-  ok(await page.evaluate(() => document.querySelectorAll('#board .col.review .held-row').length === 11), 'the 11 steps sit in the closed group under "Needs your OK"');
+  ok(await page.evaluate(() => document.querySelectorAll('#board .col.review .held-row').length === 12), 'the 12 steps sit in the closed group under "Needs your OK"');
   await page.screenshot({ path: 'shot-relay-done.png' });
   // open a test and look at the vote
   await page.click('#relay .rs.test');
@@ -127,7 +135,7 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   await page.click('#reviewDlg [data-act="close"]');
   // one approval
   await page.click('#gateList .gate-item.final button'); await page.waitForSelector('#reviewDlg[open]');
-  ok(await page.evaluate(() => /12 steps|11 drafts|drafts/.test(document.querySelector('#rvAlso').textContent) && document.querySelectorAll('#reviewBody .built-from li').length === 11), 'the package lists the 11 steps it was built from');
+  ok(await page.evaluate(() => /12 steps|11 drafts|drafts/.test(document.querySelector('#rvAlso').textContent) && document.querySelectorAll('#reviewBody .built-from li').length === 12), 'the package lists the 12 steps it was built from');
   await page.click('#reviewBody [data-act="approve"]'); await page.waitForTimeout(400);
   ts = await tasks(page);
   ok(ts.every((t) => t.status === 'approved' && t.decidedBy === 'u1'), 'one click approved the package and every step');
@@ -153,7 +161,7 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok(/Test 1: try 1 got 10 of 30 yes; try 2 got 14 of 30 yes; try 3 got 22 of 30 yes \(passed\)/.test(L.find((x) => x.label === 'Design').prompt) && /Changes the crew made after buyer tests/.test(L.find((x) => x.label === 'Design').prompt) && /tweak 3/.test(L.find((x) => x.label === 'Design').prompt), 'later roles are told how the vote went and what was changed');
   ok(conceptTries[2].changes && /lowered the price/.test(conceptTries[2].changes), 'what changed is saved with each tweak');
   ok(await page.evaluate(() => /22\/30/.test([...document.querySelectorAll('#relay .rs.test i')][0].textContent) && /try 3/.test(document.querySelector('#relay .rs').textContent + document.querySelector('#relay li .rs i').textContent)), 'the relay shows the vote that passed and the number of tries');
-  ok(await page.evaluate(() => document.querySelectorAll('#board .col.review .held-row').length === 11 + 4), 'old tries are kept in the supporting group too (15 steps)');
+  ok(await page.evaluate(() => document.querySelectorAll('#board .col.review .held-row').length === 12 + 4), 'old tries are kept in the supporting group too (16 steps)');
   ok(await page.evaluate(() => (document.querySelector('#stageStatus').textContent.match(/\d+ tests in all/) || [''])[0]) === '5 tests in all' || true, 'done message counts the tests');
   await ctx.close();
 
@@ -168,6 +176,44 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok(brev && brev.who === 'Site runner' && brev.prompt.includes('<!doctype html>') && /the whole file, not a patch/.test(brev.prompt), 'a failed Test 2 sends the build back to the builder, with the whole previous file to improve');
   ok(L.filter((x) => x.kind === 'qa').length === 2, 'the quality check runs again on the tweaked build');
   ok(ts.filter((t) => t.stage === 'concept').length === 1 && ts.filter((t) => t.stage === 'design').length === 1, 'only the build was redone, not the earlier steps');
+  await ctx.close();
+
+  // ================= the check flags problems: flagged steps go back to their owner once, before Test 3
+  ({ page, ctx, errors } = await open(browser));
+  await page.evaluate(() => { window.__checkReply = 'VERDICT: CONFLICTS FOUND\nFIX pricing: Pricing says $79 a month but the concept says $49.\nFIX launch: the Launch offer promises a free year, which no step supports.\nFIX design: the logo colour is wrong.\nNOTE Design: the logo colour differs from the concept.'; });
+  await start(page);
+  await waitStatus(page, /^Done\./);
+  L = await log(page); ts = await tasks(page);
+  const cnt = (k) => ts.filter((t) => t.stage === k).length;
+  ok(cnt('pricing') === 2 && cnt('launch') === 2 && cnt('operations') === 1 && cnt('outreach') === 1 && cnt('concept') === 1, 'only the flagged steps were sent back, once each');
+  ok(cnt('design') === 1 && cnt('build') === 1, 'a flag on Design is a note only: Design already won a buyer vote and is not rewritten');
+  ok(L.filter((x) => x.kind === 'check').length === 1, 'the check ran once');
+  const pf = L.find((x) => x.label === 'Pricing' && x.fix), lf = L.find((x) => x.label === 'Launch' && x.fix);
+  ok(pf && pf.who === 'Mako' && /\$79 a month/.test(pf.prompt) && /Output of Pricing try 1/.test(pf.prompt) && /WHAT CHANGED/.test(pf.prompt), 'the flagged step goes to its own owner with the problem and its old version');
+  ok(lf && lf.who === 'Luma' && /Output of Pricing try 2/.test(lf.prompt), 'the next fix builds on the fixed pricing, not the old one');
+  const fi = L.indexOf(lf), ci = L.findIndex((x) => x.kind === 'check'), b3 = L.findIndex((x, i) => x.kind === 'batch' && L.slice(0, i).filter((y) => y.kind === 'batch').length === 6);
+  ok(ci < L.indexOf(pf) && L.indexOf(pf) < fi && fi < b3, 'the order is check, then the fixes, then Test 3');
+  ok(/Output of Pricing try 2/.test(L[b3].prompt) && /Output of Launch try 2/.test(L[b3].prompt), 'Test 3 buyers see the fixed versions');
+  const pt = ts.filter((t) => t.stage === 'pricing').sort((a, b) => a.round - b.round)[1];
+  ok(pt.feedbackFrom && pt.problem && /lowered the price/.test(pt.changes), 'the fix is saved with what the problem was and what changed');
+  const fp2 = L[L.length - 1].prompt;
+  ok(/NOTE Design: the logo colour differs/.test(fp2) && /NOTE lines were not changed/.test(fp2), 'the final package is told about the conflict that was not fixed');
+  ok(await page.evaluate(() => [...document.querySelectorAll('#relay .rs')].every((b) => b.classList.contains('done')) && /Consistency check/.test(document.querySelector('#relay').textContent)), 'the relay shows the check as done');
+  ok(errors.length === 0, 'no page errors in the flagged run');
+  await ctx.close();
+
+  // ================= Stop during the fixes, then Resume: the check is not repeated and no fix is made twice
+  ({ page, ctx, errors } = await open(browser));
+  await page.evaluate(() => { window.__delay = 40; window.__checkReply = 'VERDICT: CONFLICTS FOUND\nFIX pricing: wrong price.\nFIX launch: wrong promise.'; });
+  await start(page);
+  await page.waitForFunction(() => window.__log.some((l) => l.fix), null, { timeout: 30000 });
+  await page.click('#autoStop');
+  await waitStatus(page, /^Autopilot stopped at step/);
+  await page.evaluate(() => { window.__delay = 30; });
+  await page.click('#autoResume');
+  await waitStatus(page, /^Done\./);
+  ts = await tasks(page); L = await log(page);
+  ok(L.filter((x) => x.kind === 'check').length === 1 && ts.filter((t) => t.stage === 'pricing').length === 2 && ts.filter((t) => t.stage === 'launch').length === 2, 'Resume does not repeat the check or make a fix twice');
   await ctx.close();
 
   // ================= no limit: it keeps tweaking and re-testing until a majority says yes
@@ -192,6 +238,7 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   await waitStatus(page, /^Autopilot stopped at step/);
   const before = (await tasks(page)).length;
   ok((await goal(page)).status === 'stopped' && !(await tasks(page)).some((t) => t.status === 'working'), 'Stop leaves nothing running');
+  await page.waitForFunction(() => !document.querySelector('#autoResume').hidden, null, { timeout: 3000 }).catch(() => {});
   ok(await page.evaluate(() => !document.querySelector('#autoResume').hidden && document.querySelector('#autoStop').hidden), 'Resume appears and Stop hides');
   await page.evaluate(() => { window.__delay = 30; });
   await page.click('#autoResume');
