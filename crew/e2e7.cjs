@@ -39,13 +39,15 @@ function fakeClaude() {
       else {
         const n = window.__log.filter((l) => l.label === label && (l.kind === 'make' || l.kind === 'final')).length;
         text = (entry.revise || entry.fix ? 'WHAT CHANGED:\n- tweak ' + n + ': lowered the price to answer the price doubt\n\n' : '') + 'Output of ' + label + ' try ' + n + '.\n' +
-          (label === 'Build' ? '<!doctype html><html><body>Site for JobPing</body></html>\n' : '') + 'Check before using: nothing';
+          (label === 'Build' && !(window.__noCode > 0 && window.__noCode--) ? '<!doctype html><html><body><h1>Site for JobPing</h1><form onsubmit="event.preventDefault();this.textContent=\'Thanks\'"><button>Join</button></form></body></html>\n' : '') + 'Check before using: nothing';
       }
       if (opts && opts.onText) opts.onText({ text });
       return { text, truncated: false };
     } finally { window.__active--; }
   }, { json: async () => window.__plan });
-  window.claude.use = async (n) => (n === 'sample' ? sample : orig(n));
+  window.__saved = [];
+  const downloads = { save: async (r) => { window.__saved.push({ filename: r.filename, data: String(r.data) }); return { status: 'saved' }; } };
+  window.claude.use = async (n) => (n === 'sample' ? sample : n === 'downloads' ? downloads : orig(n));
 }
 async function open(browser, o = {}) {
   const ctx = await browser.newContext({ viewport: { width: o.w || 1440, height: o.h || 900 }, reducedMotion: o.reduced ? 'reduce' : 'no-preference' });
@@ -126,6 +128,23 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok(await page.evaluate(() => document.querySelectorAll('#gateList .gate-item').length === 1 && document.querySelectorAll('#gateList .gate-item.final').length === 1), 'the only thing waiting on you is the final package');
   ok(await page.evaluate(() => !document.querySelector('#board .col.review') && document.querySelectorAll('#board .col.final .card').length === 1 && document.querySelectorAll('#board .col .card [data-act="review"].primary').length === 1), 'there is no Needs your OK column, and only the final draft has a Review button');
   ok(await page.evaluate(() => [...document.querySelectorAll('#relay .rs')].every((b) => b.classList.contains('done'))), 'every step in the relay is ticked');
+  ok(/The website is built/.test(await status(page)), 'the done message says the website is built');
+  await page.click('#gateList [data-act="open-site"]'); await page.waitForSelector('#siteDlg[open]');
+  ok(await page.evaluate(() => { const f = document.querySelector('#siteBody iframe.site-frame'); return !!f && /Site for JobPing/.test(f.srcdoc) && f.getAttribute('sandbox') === 'allow-scripts allow-forms'; }), 'See website opens the real built site in a safe preview');
+  const fr = page.frameLocator('#siteBody iframe');
+  let answered = false;
+  for (let k = 0; k < 5 && !answered; k++) {
+    await page.waitForTimeout(300);
+    if (await fr.locator('button').count()) await fr.locator('button').click().catch(() => {});
+    answered = await fr.locator('form', { hasText: 'Thanks' }).waitFor({ timeout: 1000 }).then(() => true, () => false);
+  }
+  ok(answered, 'the preview is a working page: its form answers');
+  await page.click('#siteBody [data-act="site-size"]');
+  ok(await page.evaluate(() => document.querySelector('#siteBody iframe').classList.contains('phone')), 'it can be shown at phone size');
+  await page.click('#siteBody [data-act="dl-site"]'); await page.click('#siteBody [data-act="dl-kit"]'); await page.waitForTimeout(200);
+  const sv = await page.evaluate(() => window.__saved);
+  ok(sv.length === 2 && /\.html$/.test(sv[0].filename) && /^<!doctype html>/i.test(sv[0].data) && /-kit\.md$/.test(sv[1].filename) && /## Final package/.test(sv[1].data) && /## Pricing/.test(sv[1].data) && /index\.html/.test(sv[1].data) && !/<!doctype/i.test(sv[1].data), 'Download website saves the .html file, and Download everything else saves one kit with every step');
+  await page.click('#siteDlg [data-act="close"]');
   ok(await page.evaluate(() => /30\/30/.test(document.querySelector('#relay .rs.test i').textContent) && document.querySelectorAll('#relay .rs.test').length === 3), 'the three test chips show their votes');
   ok(await page.evaluate(() => document.querySelectorAll('#board .col.shared .card .pkg.mgr').length >= 12), 'the 12 steps sit under Passed by the manager, each marked as passed');
   await page.screenshot({ path: 'shot-relay-done.png' });
@@ -142,7 +161,7 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok(await page.evaluate(() => !document.querySelector('#reviewBody [data-act="approve"]') && !document.querySelector('#reviewBody [data-act="send-back"]') && /Passed by the manager/.test(document.querySelector('#reviewBody .pill').textContent) && /Nova passed it on/.test(document.querySelector('#reviewBody').textContent)), 'a step has no Approve or Send back for you; it says the manager passed it');
   await page.click('#reviewDlg [data-act="close"]');
   // one approval
-  await page.click('#gateList .gate-item.final button'); await page.waitForSelector('#reviewDlg[open]');
+  await page.click('#gateList .gate-item.final [data-act="review"]'); await page.waitForSelector('#reviewDlg[open]');
   ok(await page.evaluate(() => document.querySelectorAll('#reviewBody .built-from li').length === 12 && !!document.querySelector('#reviewBody [data-act="approve"]')), 'the package lists the 12 steps it was built from, and you can approve it');
   await page.click('#reviewBody [data-act="approve"]'); await page.waitForTimeout(400);
   ts = await tasks(page);
@@ -394,6 +413,18 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   const bp = L.find((x) => x.label === 'Build' && x.kind === 'make').prompt;
   ok(/Output of Design try 2/.test(bp) && !/Output of Design try 1/.test(bp), 'the next bot builds on the fixed design, not the one sent back');
   ok(await page.evaluate(() => document.querySelectorAll('#gateList .gate-item').length === 1), 'still only the final package waits on you');
+  await ctx.close();
+
+  // ================= the build came back without a working file: the builder writes it again, automatically
+  ({ page, ctx, errors } = await open(browser));
+  await page.evaluate(() => { window.__noCode = 1; });
+  await start(page);
+  await waitStatus(page, /^Done\./, 90000);
+  ts = await tasks(page); L = await log(page);
+  const bs = ts.filter((t) => t.stage === 'build').sort((a, b) => a.round - b.round);
+  ok(bs.length === 2 && bs[0].decision === 'redo' && bs[1].fileRetry && /<!doctype html>/i.test(bs[1].output), 'a build with no website file is redone once, and the redo has the file');
+  ok(/did not contain the complete website file/.test(L.filter((x) => x.label === 'Build' && x.kind === 'make')[1].prompt), 'the builder is told exactly what was missing');
+  ok(await page.evaluate(() => !!document.querySelector('#gateList [data-act="open-site"]')), 'and the website can be opened from the final package');
   await ctx.close();
 
   // ================= a direct task is checked by the manager too, and never waits on you

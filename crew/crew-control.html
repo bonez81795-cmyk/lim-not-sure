@@ -383,6 +383,16 @@ dialog {
   padding: 0; width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 48px);
   box-shadow: 0 0 0 1px rgba(155,109,255,.14), 0 30px 90px rgba(0,0,0,.7), 0 0 60px rgba(155,109,255,.1);
 }
+.site-dlg { width: min(1180px, calc(100vw - 24px)); }
+.site-dlg .dlg { grid-template-rows: auto auto 1fr; }
+.site-frame-wrap { display: flex; justify-content: center; background: rgba(16,9,40,.5); border: 1px solid var(--line-2); border-radius: 10px; padding: 8px; overflow: hidden; }
+.site-frame { display: block; width: 100%; height: min(70vh, 760px); border: 0; border-radius: 6px; background: #fff; transition: width .25s ease; }
+.site-frame.phone { width: 390px; max-width: 100%; }
+.ready-box { display: grid; gap: 10px; padding: 12px; border: 1px solid #2c6b52; border-radius: 10px; background: rgba(61,220,151,.07); }
+.ready-box b { font: 400 18px/1.1 var(--display); letter-spacing: .05em; text-transform: uppercase; color: #9df0cb; }
+.ready-box p { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.ready-box .row2 { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (prefers-reduced-motion: reduce) { .site-frame { transition: none; } }
 dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
 .dlg { display: grid; gap: 12px; padding: 18px; }
 .dlg-h { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
@@ -594,7 +604,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
       </div>
       <form class="brief" id="briefForm" autocomplete="off">
         <label for="goal" class="sr">Goal for the crew</label>
-        <input id="goal" name="goal" maxlength="600" placeholder="Give the crew a goal, like: get 3 plumbing shops to try JobPing free">
+        <input id="goal" name="goal" maxlength="600" placeholder="Name the idea in a few words, like: website for a dog groomer in Austin">
         <label class="auto-sw" id="autoLbl" hidden title="On: the crew runs every planned task by itself and the manager hands you one final package to approve. Off: you run each task yourself.">
           <input type="checkbox" id="autoSw" checked>
           <span class="trk" aria-hidden="true"></span><span class="lbl">Autopilot</span>
@@ -746,6 +756,11 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
 <!-- review a task -->
 <dialog id="reviewDlg" aria-labelledby="reviewH">
   <div class="dlg" id="reviewBody"></div>
+</dialog>
+
+<!-- the finished website, live -->
+<dialog id="siteDlg" class="site-dlg" aria-labelledby="siteH">
+  <div class="dlg" id="siteBody"></div>
 </dialog>
 
 <!-- invite -->
@@ -1197,8 +1212,10 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
         return h("li", { class: "gate-item" + (fin ? " final" : "") },
           h("div", { class: "who" }, h("span", { class: "dot", c: a ? a.color : null }), (a ? a.name : "Removed agent") + " finished " + ago(x.finishedAt), fin ? h("span", { class: "pkg" }, "Final package") : null),
           h("div", { class: "t", text: x.title }),
-          h("div", { class: "row" }, h("span", { class: "muted", text: fin ? "Built from " + n + " draft" + (n === 1 ? "" : "s") : x.goalText ? "Goal: " + clip(x.goalText, 48) : "Direct task" }),
-            h("button", { class: "btn small primary", type: "button", "data-act": "review", "data-id": x.id }, fin ? "Review package" : "Review")));
+          h("div", { class: "row" }, h("span", { class: "muted", text: fin ? "Built from " + n + " step" + (n === 1 ? "" : "s") : x.goalText ? "Goal: " + clip(x.goalText, 48) : "Direct task" }),
+            h("span", { class: "row2", style: "display:flex;gap:6px;flex-wrap:wrap" },
+              fin && x.goalId && siteOf(x.goalId) ? h("button", { class: "btn small", type: "button", "data-act": "open-site", "data-id": x.goalId }, "See website") : null,
+              h("button", { class: "btn small primary", type: "button", "data-act": "review", "data-id": x.id }, fin ? "Review package" : "Review"))));
       }) : [h("li", { class: "gate-empty", text: S.auto || S.planning ? "The chain is working. The manager passes each step along, and the final package lands here for your OK." : "Nothing is waiting on you. Give the manager a goal and the crew brings you one final package." })]),
     );
 
@@ -1283,6 +1300,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     if (canRun() && (x.status === "planned" || x.status === "returned") && !autoBusy(x)) acts.push(h("button", { class: "btn small primary", type: "button", "data-act": "run", "data-id": x.id }, x.status === "returned" ? "Run again" : "Run"));
     if (mine && !autoBusy(x)) acts.push(h("button", { class: "btn small", type: "button", "data-act": "stop", "data-id": x.id }, "Stop"));
     if (stale && canAct()) acts.push(h("button", { class: "btn small", type: "button", "data-act": "unstick", "data-id": x.id }, "Move back to planned"));
+    if (x.kind === "final" && x.goalId && (x.status === "review" || x.status === "approved") && siteOf(x.goalId)) acts.push(h("button", { class: "btn small", type: "button", "data-act": "open-site", "data-id": x.goalId }, "See website"));
     if (x.status === "review" && x.kind === "final") acts.push(h("button", { class: "btn small primary", type: "button", "data-act": "review", "data-id": x.id }, "Review package"));
     return h("article", { class: "card" + (x.kind === "final" ? " final" : ""), c: a ? a.color : null },
       h("button", { class: "t", type: "button", "data-act": "review", "data-id": x.id }, x.title),
@@ -1637,7 +1655,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     concept: "Turn the owner's goal into ONE product concept that the whole crew will research, design, build, test and launch together. Cover: the product's name; a one-line promise; exactly who it is for; the problem and how they cope today; what is in version 1 and what is not; the price and how it is sold; why they would pick it over what they do now. Weigh three options briefly, pick the strongest and say why. Everything after this step builds on your concept, so make it specific.",
     research: "Check the concept against the real world as far as you can without browsing: the closest alternatives and what they charge, what customers usually complain about, the biggest risks, and what a person must verify. Keep facts apart from guesses. Finish with a short list called Changes I would make to the concept.",
     design: "Design this exact product: the screens or sections in order, layout, type, colour, tone, and the real copy for the key screens. Use the concept's name, promise and price exactly.",
-    build: "Build the first version of this exact product the way your playbook describes, using the concept's name, promise, price and features and the design's layout and copy. Add no features the concept does not list.",
+    build: "Build the real, finished first version of this exact product, ready to open and use, not a plan or a prompt. Write it as ONE complete self-contained HTML file, from <!doctype html> to </html>, with inline CSS and JavaScript and no outside files except Google Fonts. Use the concept's name, promise, price and features and the design's layout and real copy. Every button and form must work inside the page (a form shows a thank-you message; nothing is sent anywhere). Make it work on a phone and on a computer. Keep the file under about 25,000 characters so it is not cut off. Put the whole file first, then a short list of what the owner must fill in or check before going live. Add no features the concept does not list.",
     pricing: "Work out the money for this exact product: what one sale earns after direct costs, the break-even point, and whether the concept's price works. Recommend a price (or good, better, best) and say what buyers must be told. Label every assumption.",
     operations: "Write how this product is run on day one: who does what, the steps, tools, suppliers, and what to check with the local authority.",
     outreach: "Write how to win the first 10 customers for this exact product: who to approach, why now, the first message, the follow-up, and what to say to the three biggest doubts.",
@@ -1684,7 +1702,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
   // The newest try of a step: tries are numbered 1, 2, 3 as buyers send it back.
   const latestOf = (gid, key) => S.tasks.filter((x) => x.goalId === gid && x.stage === key)
     .sort((p, q) => (q.round || 1) - (p.round || 1) || (q.createdAt || "").localeCompare(p.createdAt || ""))[0] || null;
-  const CODE_RE = /<!doctype html[\s\S]*?<\/html>/i;
+  const CODE_RE = /(?:<!doctype html[\s\S]*?|<html[\s>][\s\S]*?)<\/html>/i;
   const stripCode = (t) => String(t || "").replace(/```[\s\S]*?```/g, "[code left out]").replace(CODE_RE, "[page code left out]");
   const extractCode = (t) => { const m = CODE_RE.exec(String(t || "")); return m ? m[0] : ""; };
   const nameOf = (a) => (a ? a.name : "a teammate");
@@ -1806,7 +1824,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
       "\n\nTHE FINISHED STEPS, in order (each is the newest version, after any buyer-test tweaks):" + ctx +
       "\n\nBUYER TEST RESULTS. The page counted these votes. The buyers are simulated, so the yes counts are an upper bound.\n" + (tests || "(no tests recorded)") +
       (qaT ? "\n\nThe Tester's quality check of the build:\n" + clip(qaT.qa, 1200) : "") + chkText + skipText +
-      "\n\nYOUR STEP: Final package. Write the one document the owner will review and approve. Open with a one-paragraph summary of the product and whether it won the buyers over. Then merge every step above into one consistent package: the concept, what it looks like, what was built (the built file is kept in the Build step, where the owner can copy it, so do not repeat the code), the price, how it runs on day one, how to win the first customers and the launch plan. Say which changes came from buyer tests. Point out any place where two steps disagree. End with the three next steps for the owner, in order. Use only what is in the steps above and never add facts, numbers or quotes." +
+      "\n\nYOUR STEP: Final package. The owner gets the finished website as a working file they can open and download right next to this package, so this is the short cover note, not a set of instructions or a prompt. Keep it under 900 words. Open with two or three sentences: what was made and whether it won the buyers over. Then merge every step above into one consistent package: the concept, what it looks like, what was built (the built file is kept in the Build step, where the owner can copy it, so do not repeat the code), the price, how it runs on day one, how to win the first customers and the launch plan. Say which changes came from buyer tests. Point out any place where two steps disagree. End with the three next steps for the owner, in order. Use only what is in the steps above and never add facts, numbers or quotes." +
       (x.status === "returned" && x.output ? "\n\nYour previous draft:\n" + clip(x.output, 6000) + "\n\nThe owner sent it back with this note:\n" + (x.note || "(no note)") + "\nRevise the draft to address the note." : "") +
       "\n\nStart with the package itself, with no preamble. Use plain text with short headings and lists. End with a section that starts with the words \"Check before using:\" followed by a numbered list of everything the owner should verify, including that the buyer votes were simulated.\nThe draft is shown as plain text, so do not use markdown symbols such as ** or #. Write headings as plain lines and lists with hyphens.";
   }
@@ -2124,6 +2142,16 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
         t = latestOf(goalId, s.key);
         if (!FINISHED(t)) { A.failed = { s, text: t && t.error }; return false; }
         if (t.status === "approved") return true;
+        // The build must be a real file, not a description. If the page code is missing or cut off, the builder writes it again once.
+        if (s.key === "build" && !extractCode(t.output) && !t.fileRetry && /Builder|Developer/.test(jobOf(agentById(s.agentId)) || "")) {
+          await S.db.doc("tasks/" + t.id).update({ status: "approved", decision: "redo", redoNote: "The reply had no complete website file.", updatedAt: nowIso() }).catch(() => {});
+          say(i, "Build · the website file was missing or cut off. " + wa(s) + " is writing it again");
+          const r = await addTask(makeData(s, i, (t.round || 1) + 1, { revises: t.id, fileRetry: true, plannedBy: mgr.id,
+            mgrAsk: "Your reply did not contain the complete website file, or it was cut off before </html>. Write the whole site again as one complete HTML file from <!doctype html> to </html>. Make it shorter if you need to, but finish it." }));
+          if (!(await attempt(r.id, runTask))) { A.failed = { s, text: (S.tasks.find((y) => y.id === r.id) || {}).error }; return false; }
+          t = latestOf(goalId, s.key);
+          if (!FINISHED(t)) { A.failed = { s, text: t && t.error }; return false; }
+        }
         // A first version is checked by the manager. A fix (after the manager or the buyers) is passed on straight away.
         if (t.revises) { await passStep(t, t.mgrAsk ? "Fixed after the manager's notes." : "Tweaked after a buyer test."); return true; }
         say(i, s.label + " · " + mgr.name + " is checking " + wa(s) + "\u2019s work");
@@ -2282,7 +2310,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
       if (gl.skipTests) {
         const best = Math.max(0, ...tests.map((y) => y.votes.yes));
         stageStatus("Done. You skipped the buyer votes, so this product did not win them" + (tests.length ? " (best result " + best + " of 30 yes)" : "") + ". The final package is waiting for your OK and says so.");
-      } else stageStatus("Done. The product passed all 3 buyer tests (" + tests.length + " tests in all) and the final package is waiting for your OK.");
+      } else stageStatus("Done. The product passed all 3 buyer tests (" + tests.length + " tests in all). " + (siteOf(goalId) ? "The website is built: press See website on the final package, or review the package to approve it." : "The final package is waiting for your OK."));
     }
   }
   // Sending the final package back rewrites it straight away with the owner's note.
@@ -2293,6 +2321,67 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     stageStatus((mgr ? mgr.name : "The manager") + " is rewriting the final package with your note…");
     const ok = await runTask(id);
     stageStatus(ok ? "The revised final package is waiting for your OK." : "The rewrite didn't finish. Press Run again on the package.");
+  }
+
+  // ---------- the finished product: the website itself, and files to take away
+  const siteOf = (gid) => { for (const k of ["build"]) { const t = latestOf(gid, k); const code = t && extractCode(t.output); if (code) return { task: t, code }; } return null; };
+  const slug = (txt) => String(txt || "product").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "product";
+  function productName(gid) {
+    const c = latestOf(gid, "concept");
+    const m = c && /(?:product name|name)\s*[:\-]\s*([^\n]{2,60})/i.exec(c.output || "");
+    return m ? m[1].replace(/["“”]/g, "").trim() : "";
+  }
+  function kitText(gid) {
+    const g = S.goals.find((y) => y.id === gid) || {};
+    const stages = stagesOf(gid);
+    const fin = latestOf(gid, "final");
+    let out = "# " + (productName(gid) || clip(g.text || "Your product", 80)) + "\n\nGoal: " + (g.text || "") + "\n\n";
+    if (fin && fin.output) out += "## Final package\n\n" + fin.output + "\n\n";
+    for (const z of stages.filter((q) => q.kind === "make")) {
+      const t = latestOf(gid, z.key);
+      if (!FINISHED(t)) continue;
+      out += "## " + z.label + " (by " + nameOf(agentById(t.agentId)) + ")\n\n" + (z.key === "build" ? stripCode(t.output).replace("[page code left out]", "[The website is in its own file: index.html]") : t.output) + "\n\n";
+    }
+    const tests = testHistory(gid, stages);
+    if (tests) out += "## Buyer tests (simulated)\n\n" + tests + "\n";
+    return out;
+  }
+  async function saveFile(name, data, btn) {
+    if (!S.dl) { copyText(data, btn); notice("Downloads aren't available in this view, so the file was copied instead. Paste it into a file called " + name + "."); return; }
+    try { await S.dl.save({ filename: name, data }); }
+    catch (e) {
+      if (e && e.code === "declined") return;
+      if (e && e.code === "rate_limited") { notice("A download is already waiting for your OK. Answer it, then try again."); return; }
+      copyText(data, btn); notice("The download didn't start, so the file was copied instead. Paste it into a file called " + name + ".");
+    }
+  }
+  function openSite(gid) {
+    const site = siteOf(gid);
+    if (!site) { notice("This product doesn't have a website file yet."); return; }
+    S.siteGoal = gid;
+    const name = productName(gid) || "Your website";
+    const frame = h("iframe", { class: "site-frame" + (S.sitePhone ? " phone" : ""), title: name + " preview", sandbox: "allow-scripts allow-forms" });
+    frame.srcdoc = site.code;
+    put($("#siteBody"),
+      h("div", { class: "dlg-h" }, h("div", {}, h("p", { class: "muted", text: "Built by " + nameOf(agentById(site.task.agentId)) + " · working preview, nothing is sent anywhere" }), h("h2", { id: "siteH", text: name })),
+        h("button", { class: "x", type: "button", "data-act": "close", "aria-label": "Close" }, "×")),
+      h("div", { class: "dlg-acts", style: "justify-content:flex-start" },
+        h("button", { class: "btn small", type: "button", "data-act": "site-size", "aria-pressed": S.sitePhone ? "true" : "false" }, S.sitePhone ? "Computer size" : "Phone size"),
+        h("button", { class: "btn small primary", type: "button", "data-act": "dl-site", "data-id": gid }, "Download website"),
+        h("button", { class: "btn small", type: "button", "data-act": "dl-kit", "data-id": gid }, "Download everything else")),
+      h("div", { class: "site-frame-wrap" }, frame));
+    const d = $("#siteDlg");
+    if (!d.open) d.showModal();
+  }
+  function readyBox(gid) {
+    const site = siteOf(gid);
+    return h("div", { class: "ready-box" },
+      h("b", { text: site ? "Your website is built" : "Your product is ready" }),
+      h("p", { text: site ? "Open it to click through the real site, then download it. Everything else the crew made (pricing, how to run it, first customers, launch) comes as one file." : "Everything the crew made comes as one file you can download." }),
+      h("div", { class: "row2" },
+        site ? h("button", { class: "btn small primary", type: "button", "data-act": "open-site", "data-id": gid }, "Open your website") : null,
+        site ? h("button", { class: "btn small", type: "button", "data-act": "dl-site", "data-id": gid }, "Download website") : null,
+        h("button", { class: "btn small", type: "button", "data-act": "dl-kit", "data-id": gid }, "Download everything else")));
   }
 
   // ---------- review dialog
@@ -2324,6 +2413,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
         h("p", { class: "muted" }, h("span", { class: "dot", c: a ? a.color : null, style: "display:inline-block;margin-right:6px" }), (a ? a.name + ", " + a.role : "Removed agent")),
         h("h2", { id: "reviewH", text: x.title })),
         h("button", { class: "x", type: "button", "data-act": "close", "aria-label": "Close" }, "×")),
+      fin && x.goalId && x.output ? readyBox(x.goalId) : null,
       h("dl", { class: "kv" },
         h("dt", { text: "Status" }), h("dd", {}, h("span", { class: "pill " + pillClass(x), text: statusLabel(x) })),
         h("dt", { text: "Goal" }), h("dd", { text: x.goalText || "Direct task" }),
@@ -2348,6 +2438,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
           ? h("button", { class: "btn danger left", type: "button", "data-act": "del-task-yes", "data-id": x.id }, "Confirm delete")
           : h("button", { class: "btn danger left", type: "button", "data-act": "del-task", "data-id": x.id }, "Delete task")) : null,
         x.output ? h("button", { class: "btn", type: "button", "data-act": "copy-output", "data-id": x.id }, "Copy draft") : null,
+        x.stage === "build" && extractCode(x.output) ? h("button", { class: "btn", type: "button", "data-act": "open-site", "data-id": x.goalId }, "Open website") : null,
         x.stage === "build" && extractCode(x.output) ? h("button", { class: "btn", type: "button", "data-act": "copy-code", "data-id": x.id, title: "Copies the finished page. Paste it into a file called index.html and open it." }, "Copy website file") : null,
         decide ? h("button", { class: "btn", type: "button", "data-act": "send-back", "data-id": x.id }, "Send back") : null,
         decide ? h("button", { class: "btn ok", type: "button", "data-act": "approve", "data-id": x.id }, fin ? "Approve package" : "Approve") : null,
@@ -2799,6 +2890,10 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
         if (x) copyText(x.output || "", b);
         break;
       }
+      case "open-site": if ($("#reviewDlg").open) $("#reviewDlg").close(); openSite(id); break;
+      case "site-size": { S.sitePhone = !S.sitePhone; const f = $("#siteBody .site-frame"); if (f) f.classList.toggle("phone", S.sitePhone); b.textContent = S.sitePhone ? "Computer size" : "Phone size"; b.setAttribute("aria-pressed", S.sitePhone ? "true" : "false"); break; }
+      case "dl-site": { const site = siteOf(id); if (site) saveFile(slug(productName(id) || "website") + ".html", site.code, b); break; }
+      case "dl-kit": saveFile(slug(productName(id) || "product") + "-kit.md", kitText(id), b); break;
       case "copy-code": {
         const x = S.tasks.find((y) => y.id === id);
         if (x) copyText(extractCode(x.output), b);
@@ -3554,8 +3649,8 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     const C = window.claude && typeof window.claude.use === "function" ? window.claude : null;
     if (!C) { S.noDb = true; notice("Open this page on claude.ai to use the crew. This copy can't reach the shared crew."); renderAll(); return; }
     const use = (n) => C.use(n).catch(() => null);
-    const [db, user, sample, room, mcp] = await Promise.all([use("db"), use("user"), use("sample"), use("room"), use("mcp")]);
-    S.db = db; S.user = user; S.sample = sample; S.room = room; S.mcp = mcp;
+    const [db, user, sample, room, mcp, dl] = await Promise.all([use("db"), use("user"), use("sample"), use("room"), use("mcp"), use("downloads")]);
+    S.db = db; S.user = user; S.sample = sample; S.room = room; S.mcp = mcp; S.dl = dl;
     if (user) {
       S.me = await user.id();
       S.canWrite = await user.can("data.write");
