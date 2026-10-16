@@ -399,6 +399,19 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok(/Add a Tester agent first/.test(await status(page)) && (await page.evaluate(() => Object.keys(window.__store.goals).length)) === 0, 'with no Tester it says to add one and starts nothing');
   await ctx.close();
 
+  // ================= every role gets its skills; the builder gets the pro web-design method and a design system to follow
+  ({ page, ctx, errors } = await open(browser));
+  await start(page);
+  await waitStatus(page, /^Done\./, 90000);
+  L = await log(page);
+  const mk = (lab) => L.find((x) => x.kind === 'make' && x.label === lab).prompt;
+  ok(['Concept', 'Research', 'Design', 'Build', 'Pricing', 'Operations', 'Outreach', 'Launch'].every((lab) => /Your role skills:/.test(mk(lab))), 'every step is written with its role skills');
+  ok(/DESIGN TOKENS as a CSS block/.test(mk('Design')) && /senior brand and web designer/.test(mk('Design')), 'the Designer is asked for a full design system');
+  ok(/PROFESSIONAL WEB DESIGNER/.test(mk('Build')) && /Follow the Designer's DESIGN TOKENS/.test(mk('Build')) && /Output of Design try 1/.test(mk('Build')), 'the builder gets the pro web-design method and the Designer\'s system');
+  const br = L.find((x) => x.kind === 'review' && x.label === 'Build').prompt, cr = L.find((x) => x.kind === 'review' && x.label === 'Pricing').prompt;
+  ok(/demanding art director/.test(br) && /Your role skills:/.test(br) && !/demanding art director/.test(cr), 'the manager judges the build like an art director, and only design work gets that bar');
+  await ctx.close();
+
   // ================= the manager sends a step back: it is fixed once and passed on, and you never see it
   ({ page, ctx, errors } = await open(browser));
   await page.evaluate(() => { window.__mgr = { Design: { n: 1 } }; });
