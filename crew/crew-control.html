@@ -613,7 +613,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
           <input type="checkbox" id="autoSw" checked>
           <span class="trk" aria-hidden="true"></span><span class="lbl">Autopilot</span>
         </label>
-        <label class="auto-sw" id="webLbl" title="On: the idea, research, pricing, outreach and launch steps search and read real web pages through the Claude desktop app's browser before writing. The app asks you before each new website.">
+        <label class="auto-sw" id="webLbl" title="On: every writing step (idea, research, design, build, pricing, operations, outreach, launch) can search and read real web pages through the Claude desktop app's browser before writing. The app asks you before each new website.">
           <input type="checkbox" id="webSw" checked>
           <span class="trk" aria-hidden="true"></span><span class="lbl">Web research</span>
         </label>
@@ -2361,8 +2361,8 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
 
   // ---------- web research: the bots search and read real pages through the Claude desktop app's own browser
   // It only answers when this page is open in the Claude desktop app; the app asks the viewer before each new website.
-  const WEB_STAGES = ["concept", "research", "pricing", "outreach", "launch"];
-  const WEB_MAX = 8;
+  const WEB_STAGES = ["concept", "research", "design", "build", "pricing", "operations", "outreach", "launch"];
+  const WEB_MAX = 12;
   const BROWSER = "host:claude_browser";
   function webOn() { const el = $("#webSw"); return !!el && el.checked; }
   const webWanted = (x) => !!(x.pipe && WEB_STAGES.includes(x.stage) && webOn() && !S.webOff && S.mcp && S.sampleTools);

@@ -434,7 +434,7 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   L = await log(page); ts = await tasks(page);
   const mp = (lab) => L.find((x) => x.kind === 'make' && x.label === lab);
   ok(/Twelve genuinely different ideas/.test(mp('Concept').prompt) && /THE CONCEPT/.test(mp('Concept').prompt) && /OPTIONS CONSIDERED/.test(mp('Concept').prompt) && /inventor/.test(mp('Concept').prompt), 'the idea step thinks wide: 12 ideas across 6 lenses, scored, then one concept first');
-  ok(['Concept', 'Research', 'Pricing', 'Outreach', 'Launch'].every((l) => mp(l).web && /YOU CAN BROWSE THE WEB/.test(mp(l).prompt)) && ['Design', 'Build', 'Operations'].every((l) => !mp(l).web), 'idea, research, pricing, outreach and launch can browse; design and build do not');
+  ok(['Concept', 'Research', 'Design', 'Build', 'Pricing', 'Operations', 'Outreach', 'Launch'].every((l) => mp(l).web && /YOU CAN BROWSE THE WEB/.test(mp(l).prompt) && /up to 12 lookups/.test(mp(l).prompt)), 'every writing step can browse, up to 12 lookups each');
   const mc = await page.evaluate(() => window.__mcpCalls);
   ok(mc.some((c) => c.server === 'host:claude_browser' && c.tool === 'navigate' && /html\.duckduckgo\.com\/html\/\?q=missed%20call/.test(c.input.url)) && mc.some((c) => c.tool === 'navigate' && c.input.url === 'https://example.com/pricing') && mc.some((c) => c.tool === 'get_page_text'), 'searches and page reads go through the Claude app\'s browser');
   ok(mp('Research').toolOut.every((t) => /Acme Plumb charges/.test(t)), 'the bot gets the page text back');
