@@ -1780,7 +1780,8 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
       } else if (prev && fb && fb.votes) {
         revise = "\n\nTHE BUYER TEST FAILED. Your previous version of this step:\n" + clip(prev.output || "", s.key === "build" ? 14000 : 6000) +
           "\n\nThe Tester's " + fb.votes.total + " simulated buyers voted " + fb.votes.yes + " yes. It needs " + fb.votes.need + ". Their verdict:\n" + clip(fb.digest || fb.output || "", 3500) +
-          "\n\nTweak this step to win the buyers over without losing what already works. Start your reply with a section called WHAT CHANGED that lists each change and the buyer doubt it answers. Then give the complete revised " + s.label.toLowerCase() + (s.key === "build" ? " (the whole file, not a patch)" : "") + ".";
+          "\n\nCHANGE ONLY WHAT THE BUYERS ASKED FOR, AND NOTHING MORE. Make exactly the changes the buyers' verdict names under what would change their minds and the three changes most likely to win them over. Everything else stays exactly as it was, word for word: the name, the customer, the promise, the price, the features, the layout, the copy and the code, unless a buyer asked for that specific thing to change. Do not add new ideas, features or sections, do not rewrite parts the buyers did not mention, and do not look anything up. If a buyer asked for something writing cannot supply (real reviews, signed customers, measured results), do not invent it: list it under a line starting \"Cannot change by writing:\" for the owner." +
+          "\n\nStart your reply with a section called WHAT CHANGED that lists each change and the exact buyer request it answers, with how many buyers asked. Then give the complete revised " + s.label.toLowerCase() + (s.key === "build" ? " (the whole file, not a patch)" : "") + ", identical to your previous version apart from those changes.";
       }
     }
     return "You are " + a.name + ", the " + a.role + " on a small AI crew that is building ONE product together, one role after another.\nYour standing instructions: " + (a.instructions || ROLES[a.role] || "Do excellent work in your role.") + "\n" + skillBlock(a) + LIMITS +
@@ -2365,7 +2366,9 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
   const WEB_MAX = 12;
   const BROWSER = "host:claude_browser";
   function webOn() { const el = $("#webSw"); return !!el && el.checked; }
-  const webWanted = (x) => !!(x.pipe && WEB_STAGES.includes(x.stage) && webOn() && !S.webOff && S.mcp && S.sampleTools);
+  // A tweak after a buyer test changes only what the buyers asked for, so it doesn't browse for new material.
+  const buyerTweak = (x) => { const fb = x.feedbackFrom && S.tasks.find((y) => y.id === x.feedbackFrom); return !!(x.revises && fb && fb.votes); };
+  const webWanted = (x) => !!(x.pipe && WEB_STAGES.includes(x.stage) && !buyerTweak(x) && webOn() && !S.webOff && S.mcp && S.sampleTools);
   function pageTextOf(res) {
     if (!res) return "";
     const p = res.payload;

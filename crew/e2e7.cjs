@@ -207,6 +207,16 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok(await page.evaluate(() => (document.querySelector('#stageStatus').textContent.match(/\d+ tests in all/) || [''])[0]) === '5 tests in all' || true, 'done message counts the tests');
   await ctx.close();
 
+  // ================= a buyer-test tweak changes only what the buyers asked for
+  ({ page, ctx, errors } = await open(browser));
+  await start(page, null, [8]);
+  await waitStatus(page, /^Done\./, 90000);
+  L = await log(page);
+  const tw = L.filter((x) => x.kind === 'make' && x.label === 'Concept')[1];
+  ok(tw && tw.revise && /CHANGE ONLY WHAT THE BUYERS ASKED FOR, AND NOTHING MORE/.test(tw.prompt) && /word for word/.test(tw.prompt) && /Cannot change by writing:/.test(tw.prompt) && /identical to your previous version apart from those changes/.test(tw.prompt), 'the tweak is told to change only what the buyers asked for and keep the rest word for word');
+  ok(!tw.web && !/YOU CAN BROWSE THE WEB/.test(tw.prompt) && L.filter((x) => x.kind === 'make' && x.label === 'Concept')[0].web, 'the tweak does not browse for new material (the first version did)');
+  await ctx.close();
+
   // ================= exactly 15 of 30 is not a majority, 16 is. Test 2 also fails once and the build is tweaked.
   ({ page, ctx, errors } = await open(browser));
   await start(page, null, [30, 15, 16, 30]);
