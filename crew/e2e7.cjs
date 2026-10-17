@@ -23,6 +23,13 @@ function fakeClaude() {
     window.__active++; window.__maxActive = Math.max(window.__maxActive, window.__active);
     try {
       await new Promise((res, rej) => { const t = setTimeout(res, window.__delay); if (opts && opts.signal) opts.signal.addEventListener('abort', () => { clearTimeout(t); rej({ code: 'cancelled' }); }); });
+      if (opts && opts.tools) {
+        entry.web = true; entry.toolOut = []; entry.toolErr = [];
+        for (const t of opts.tools) {
+          try { entry.toolOut.push(String(await t.execute(t.name === 'web_search' ? { query: 'missed call text back prices' } : { url: 'example.com/pricing' }, { signal: opts.signal }))); }
+          catch (e) { entry.toolErr.push(e.message); }
+        }
+      }
       const f = window.__fail[label];
       if (kind !== 'batch' && f && f.n > 0) { f.n--; throw { code: f.code || window.__failCode }; }
       let text;
@@ -47,7 +54,15 @@ function fakeClaude() {
   }, { json: async () => window.__plan });
   window.__saved = [];
   const downloads = { save: async (r) => { window.__saved.push({ filename: r.filename, data: String(r.data) }); return { status: 'saved' }; } };
-  window.claude.use = async (n) => (n === 'sample' ? sample : n === 'downloads' ? downloads : orig(n));
+  sample.limits = async () => ({ maxPromptBytes: 262144, tools: window.__noTools ? undefined : { maxTools: 8 } });
+  window.__mcpCalls = [];
+  const mcp = { callTool: async (server, tool, input) => {
+    window.__mcpCalls.push({ server, tool, input });
+    if (window.__webDown) throw { code: 'server_not_connected', message: 'no app' };
+    if (tool === 'get_page_text') return { content: [{ type: 'text', text: 'Acme Plumb charges $49 a month' }], payload: 'Acme Plumb charges $49 a month' };
+    return { content: [], payload: null };
+  } };
+  window.claude.use = async (n) => (n === 'sample' ? sample : n === 'downloads' ? downloads : n === 'mcp' ? mcp : orig(n));
 }
 async function open(browser, o = {}) {
   const ctx = await browser.newContext({ viewport: { width: o.w || 1440, height: o.h || 900 }, reducedMotion: o.reduced ? 'reduce' : 'no-preference' });
@@ -64,7 +79,7 @@ async function open(browser, o = {}) {
 const status = (page) => page.evaluate(() => document.querySelector('#stageStatus').textContent);
 const waitStatus = (page, re, ms) => page.waitForFunction((src) => new RegExp(src).test(document.querySelector('#stageStatus').textContent), re.source, { timeout: ms || 40000 });
 const tasks = (page) => page.evaluate(() => Object.entries(window.__store.tasks).map(([id, t]) => ({ id, ...t })).filter((t) => t.goalId));
-const log = (page) => page.evaluate(() => window.__log.map((l) => ({ kind: l.kind, label: l.label, who: l.who, revise: l.revise, fix: l.fix, active: l.active, prompt: l.prompt })));
+const log = (page) => page.evaluate(() => window.__log.map((l) => ({ kind: l.kind, label: l.label, who: l.who, revise: l.revise, fix: l.fix, active: l.active, prompt: l.prompt, web: !!l.web, toolOut: l.toolOut || [], toolErr: l.toolErr || [] })));
 const goal = (page) => page.evaluate(() => Object.values(window.__store.goals)[0]);
 async function start(page, text, rounds) {
   if (rounds) await page.evaluate((r) => { window.__rounds = r; }, rounds);
@@ -410,6 +425,37 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok(/PROFESSIONAL WEB DESIGNER/.test(mk('Build')) && /Follow the Designer's DESIGN TOKENS/.test(mk('Build')) && /Output of Design try 1/.test(mk('Build')), 'the builder gets the pro web-design method and the Designer\'s system');
   const br = L.find((x) => x.kind === 'review' && x.label === 'Build').prompt, cr = L.find((x) => x.kind === 'review' && x.label === 'Pricing').prompt;
   ok(/demanding art director/.test(br) && /Your role skills:/.test(br) && !/demanding art director/.test(cr), 'the manager judges the build like an art director, and only design work gets that bar');
+  await ctx.close();
+
+  // ================= wide ideas, and web research through the Claude app's browser
+  ({ page, ctx, errors } = await open(browser));
+  await start(page);
+  await waitStatus(page, /^Done\./, 90000);
+  L = await log(page); ts = await tasks(page);
+  const mp = (lab) => L.find((x) => x.kind === 'make' && x.label === lab);
+  ok(/Twelve genuinely different ideas/.test(mp('Concept').prompt) && /THE CONCEPT/.test(mp('Concept').prompt) && /OPTIONS CONSIDERED/.test(mp('Concept').prompt) && /inventor/.test(mp('Concept').prompt), 'the idea step thinks wide: 12 ideas across 6 lenses, scored, then one concept first');
+  ok(['Concept', 'Research', 'Pricing', 'Outreach', 'Launch'].every((l) => mp(l).web && /YOU CAN BROWSE THE WEB/.test(mp(l).prompt)) && ['Design', 'Build', 'Operations'].every((l) => !mp(l).web), 'idea, research, pricing, outreach and launch can browse; design and build do not');
+  const mc = await page.evaluate(() => window.__mcpCalls);
+  ok(mc.some((c) => c.server === 'host:claude_browser' && c.tool === 'navigate' && /html\.duckduckgo\.com\/html\/\?q=missed%20call/.test(c.input.url)) && mc.some((c) => c.tool === 'navigate' && c.input.url === 'https://example.com/pricing') && mc.some((c) => c.tool === 'get_page_text'), 'searches and page reads go through the Claude app\'s browser');
+  ok(mp('Research').toolOut.every((t) => /Acme Plumb charges/.test(t)), 'the bot gets the page text back');
+  const rs = ts.find((t) => t.stage === 'research');
+  ok(rs.sources && rs.sources.length === 2 && rs.sources[0].kind === 'search' && rs.sources[1].url === 'https://example.com/pricing', 'each step saves what it looked up');
+  await page.click('#board .card button.t[data-id="' + rs.id + '"]'); await page.waitForSelector('#reviewDlg[open]');
+  ok(await page.evaluate(() => /Looked up on the web \(2\)/.test(document.querySelector('#reviewBody .web-src summary').textContent) && document.querySelector('#reviewBody .web-src a').getAttribute('href') === 'https://example.com/pricing'), 'the step shows what it looked up, with links');
+  await page.click('#reviewDlg [data-act="close"]');
+  ok(errors.length === 0, 'no page errors with web research' + (errors.length ? ': ' + errors.join(' | ') : ''));
+  await ctx.close();
+  ({ page, ctx, errors } = await open(browser));
+  await page.uncheck('#webSw');
+  await start(page); await waitStatus(page, /^Done\./, 90000);
+  L = await log(page);
+  ok(!L.some((x) => x.web || /YOU CAN BROWSE/.test(x.prompt)) && (await page.evaluate(() => window.__mcpCalls.length)) === 0, 'with Web research off, nothing browses');
+  await ctx.close();
+  ({ page, ctx, errors } = await open(browser));
+  await page.evaluate(() => { window.__webDown = true; });
+  await start(page); await waitStatus(page, /^Done\./, 90000);
+  L = await log(page);
+  ok(mp('Concept').toolErr.length && /isn't available right now/.test(mp('Concept').toolErr[0]) && !L.find((x) => x.kind === 'make' && x.label === 'Research').web, 'when the app\'s browser can\'t be reached, the bot is told once and the rest of the chain writes without browsing');
   await ctx.close();
 
   // ================= the manager sends a step back: it is fixed once and passed on, and you never see it
