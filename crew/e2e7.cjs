@@ -46,7 +46,7 @@ function fakeClaude() {
       else {
         const n = window.__log.filter((l) => l.label === label && (l.kind === 'make' || l.kind === 'final')).length;
         text = (entry.revise || entry.fix ? 'WHAT CHANGED:\n- tweak ' + n + ': lowered the price to answer the price doubt\n\n' : '') + 'Output of ' + label + ' try ' + n + '.\n' +
-          (label === 'Build' && !(window.__noCode > 0 && window.__noCode--) ? '<!doctype html><html><body><h1>Site for JobPing</h1><form onsubmit="event.preventDefault();this.textContent=\'Thanks\'"><button>Join</button></form></body></html>\n' : '') + 'Check before using: nothing';
+          (label === 'Build' && !(window.__noCode > 0 && window.__noCode--) ? (window.__chatty ? 'Notes: I wrote it from <!doctype html> to </html> as asked. Name: your brand placeholder until the owner picks a name.\n' : '') + '<!doctype html><html><head><title>JobPing | Never miss a call</title><style>body{font-family:Georgia,serif;margin:0;padding:40px}h1{font-size:44px}p{max-width:60ch;line-height:1.6}</style></head><body><h1>Site for JobPing</h1><p>Every missed call gets a text back within a minute, so the job stays yours. Plumbers in town use it to stop losing work to whoever picks up first.</p><form onsubmit="event.preventDefault();this.textContent=\'Thanks\'"><button>Join</button></form></body></html>\n' : '') + 'Check before using: nothing';
       }
       if (opts && opts.onText) opts.onText({ text });
       return { text, truncated: false };
@@ -518,6 +518,17 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok(await page.evaluate(() => !!document.querySelector('#gateList [data-act="open-site"]')), 'and the website can be opened from the final package');
   await ctx.close();
 
+  // ================= the preview finds the real page even when the notes mention <!doctype html> and </html>
+  ({ page, ctx, errors } = await open(browser));
+  await page.evaluate(() => { window.__chatty = true; });
+  await start(page);
+  await waitStatus(page, /^Done\./, 90000);
+  await page.click('#gateList [data-act="open-site"]'); await page.waitForSelector('#siteDlg[open]');
+  const pv = await page.evaluate(() => ({ src: document.querySelector('#siteBody iframe').srcdoc, h: document.querySelector('#siteH').textContent }));
+  ok(/^<!doctype html><html><head><title>JobPing/.test(pv.src) && /Site for JobPing/.test(pv.src) && !/as asked/.test(pv.src), 'the preview shows the real page, not the words between a mention of <!doctype html> and </html>');
+  ok(pv.h === 'JobPing', 'the preview is titled from the page itself, not from a note: ' + pv.h);
+  await ctx.close();
+
   // ================= a direct task is checked by the manager too, and never waits on you
   ({ page, ctx, errors } = await open(browser));
   await page.evaluate(() => { window.__mgr = { 'Cold email sequence': { n: 1 } }; });
@@ -542,6 +553,7 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   await page.screenshot({ path: 'shot-relay-phone.png' });
   await waitStatus(page, /^Done\./);
   ok((await page.evaluate(() => document.documentElement.scrollWidth)) <= 376, 'and none after a run');
+  await page.waitForFunction(() => document.querySelector('#board').dataset.show === 'final', null, { timeout: 4000 }).catch(() => {});
   ok(await page.evaluate(() => { const b = document.querySelector('#board'); const vis = [...b.querySelectorAll('.col')].filter((c) => getComputedStyle(c).display !== 'none'); return !!document.querySelector('#boardTabs button') && getComputedStyle(document.querySelector('#boardTabs')).display !== 'none' && vis.length === 1 && vis[0].classList.contains('final'); }), 'on a phone the board shows one column at a time, opening on Final once the package exists');
   await page.click('#boardTabs button.shared');
   await page.waitForFunction(() => document.querySelector('#board').dataset.show === 'shared', null, { timeout: 3000 }).catch(() => {});

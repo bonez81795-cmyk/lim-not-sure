@@ -1863,8 +1863,27 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
   const latestOf = (gid, key) => S.tasks.filter((x) => x.goalId === gid && x.stage === key)
     .sort((p, q) => (q.round || 1) - (p.round || 1) || (q.createdAt || "").localeCompare(p.createdAt || ""))[0] || null;
   const CODE_RE = /(?:<!doctype html[\s\S]*?|<html[\s>][\s\S]*?)<\/html>/i;
-  const stripCode = (t) => String(t || "").replace(/```[\s\S]*?```/g, "[code left out]").replace(CODE_RE, "[page code left out]");
-  const extractCode = (t) => { const m = CODE_RE.exec(String(t || "")); return m ? m[0] : ""; };
+  // The real page, not a mention of one. Notes can say "from <!doctype html> to </html>", so a match only counts when it is a
+  // substantial document with a head or body. Each possible start is tried against the LAST </html> after it.
+  function extractCode(t) {
+    const text = String(t || "");
+    const end = text.toLowerCase().lastIndexOf("</html>");
+    if (end < 0) return "";
+    const starts = [];
+    const re = /<!doctype html|<html[\s>]/gi;
+    for (let m; (m = re.exec(text));) starts.push(m.index);
+    const low = text.toLowerCase();
+    for (const st of starts) {
+      if (st >= end) break;
+      // A mention like "from <!doctype html> to </html>" closes before any head or body; a real page doesn't.
+      const firstClose = low.indexOf("</html>", st), firstPart = low.slice(st).search(/<(head|body|style)[\s>]/);
+      if (firstPart < 0 || st + firstPart > firstClose) continue;
+      const doc = text.slice(st, end + 7);
+      if (doc.length > 400 && /<(body|head|style)[\s>]/i.test(doc)) return doc.replace(/^<html/i, (x) => (/^<!doctype/i.test(doc) ? x : "<!doctype html>\n" + x));
+    }
+    return "";
+  }
+  const stripCode = (t) => { const code = extractCode(t); let out = String(t || ""); if (code) out = out.replace(code, "[page code left out]"); return out.replace(/```[\s\S]*?```/g, "[code left out]"); };
   const nameOf = (a) => (a ? a.name : "a teammate");
 
   // ----- prompts
@@ -2550,10 +2569,15 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
   // ---------- the finished product: the website itself, and files to take away
   const siteOf = (gid) => { for (const k of ["build"]) { const t = latestOf(gid, k); const code = t && extractCode(t.output); if (code) return { task: t, code }; } return null; };
   const slug = (txt) => String(txt || "product").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "product";
+  // The product's name: the built page's own <title> first, then the concept's "Name" line. Anything that reads like a note is ignored.
   function productName(gid) {
-    const c = latestOf(gid, "concept");
-    const m = c && /(?:product name|name)\s*[:\-]\s*([^\n]{2,60})/i.exec(c.output || "");
-    return m ? m[1].replace(/["“”]/g, "").trim() : "";
+    const ok = (v) => { v = String(v || "").replace(/["“”*#]/g, "").replace(/\s+/g, " ").trim(); return v && v.length <= 48 && v.split(" ").length <= 7 && !/placeholder|owner|until|tbd|to be|\[|\bname\b/i.test(v) ? v : ""; };
+    const site = siteOf(gid);
+    const tm = site && /<title[^>]*>([^<]{1,120})<\/title>/i.exec(site.code);
+    if (tm) { const v = ok(tm[1].split(/\s[|\-–—·:]\s/)[0]); if (v) return v; }
+    const c = latestOf(gid, "concept"), out = (c && c.output) || "";
+    const a = /^\s*(?:product\s+)?name\s*[:\-–]\s*(.+)$/im.exec(out) || /^\s*(?:product\s+)?name\s*$\n\s*(.+)$/im.exec(out);
+    return a ? ok(a[1]) : "";
   }
   function kitText(gid) {
     const g = S.goals.find((y) => y.id === gid) || {};
