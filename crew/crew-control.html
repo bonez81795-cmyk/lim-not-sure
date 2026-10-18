@@ -522,6 +522,93 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
   .tab { padding: 9px 8px; letter-spacing: .05em; font-size: 10px; }
   .mini dt { letter-spacing: .06em; white-space: nowrap; }
 }
+
+/* ---------- phones: one calm column, readable type, big targets, nothing that wraps into a wall */
+.board-tabs { display: none; }
+@media (max-width: 600px) {
+  body { font-size: 14px; -webkit-text-size-adjust: 100%; }
+  .top { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 14px; }
+  .brand { gap: 10px; }
+  .brand h1 { font-size: 19px; }
+  .people { grid-column: 2; grid-row: 1; width: auto; margin: 0; }
+  .faces { display: none; }
+  .invite { font-size: 0; min-height: 36px; padding: 0 12px; }
+  .invite::after { content: "+ Invite"; font: 500 11px/1 var(--mono); letter-spacing: .1em; }
+  .strip { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin: 0; padding-top: 10px; border-top: 1px solid var(--line); }
+  .strip div { padding: 0 8px; border-left: 1px solid var(--line); min-width: 0; }
+  .strip div:first-child { border-left: 0; padding-left: 0; }
+  .strip div:last-child { display: none; }
+  .strip dt { font-size: 9.5px; letter-spacing: .06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .strip dd { font-size: 22px; margin-top: 3px; }
+
+  .tabs { margin-bottom: 8px; }
+  .tab { min-height: 44px; padding: 0 14px; font-size: 11.5px; letter-spacing: .08em; }
+
+  .stage { border-radius: 14px; }
+  .stage-top { padding: 14px 14px 0; }
+  .stage-top .sub { font: 400 13px/1.5 var(--body); letter-spacing: 0; }
+  .mini div { padding: 6px 10px; }
+  .mini dt { font-size: 9px; }
+  .mini dd { font-size: 19px; margin-top: 2px; }
+
+  /* the crew: one swipeable row instead of six rows of chips */
+  .crew-row { flex-wrap: nowrap; overflow-x: auto; gap: 8px; padding: 12px 14px 4px; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
+  .crew-row::-webkit-scrollbar { display: none; }
+  .chip { flex: none; min-height: 36px; padding: 0 12px 0 10px; font-size: 13px; }
+  .chip .role { font-size: 10.5px; }
+
+  /* the swirl: big enough to enjoy, small enough to leave room for the work */
+  .vzone { height: clamp(300px, 44vh, 380px); min-height: 300px; }
+
+  .stage-status { font: 500 13.5px/1.5 var(--body); letter-spacing: 0; text-shadow: none; padding: 8px 16px 6px; }
+
+  /* the relay: one swipeable line that keeps the current step in view */
+  .relay { flex-wrap: nowrap; overflow-x: auto; gap: 6px; padding: 4px 14px 12px; scrollbar-width: none; scroll-snap-type: x proximity; -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent); mask-image: linear-gradient(90deg, #000 88%, transparent); }
+  .relay::-webkit-scrollbar { display: none; }
+  .relay li { flex: none; scroll-snap-align: start; }
+  .rs { min-height: 38px; padding: 0 14px; font-size: 12px; }
+
+  /* controls: two even columns of real buttons; view tweaks that only matter with a mouse are hidden */
+  .vctl { padding: 4px 14px 10px; }
+  #vReset, #vFocus, .phases, .vhint { display: none; }
+  .vbtns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: 100%; }
+  .vbtns .btn { min-height: 44px; font-size: 11.5px; justify-content: center; text-align: center; }
+
+  .brief { margin: 0 12px 14px; padding: 10px; gap: 6px 8px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .brief #goal, #briefBtn { grid-column: 1 / -1; }
+  .strip .gate-cell dt { font-size: 0; }
+  .strip .gate-cell dt::after { content: "For you"; font-size: 9.5px; }
+  .brief #goal { font-size: 16px; padding: 12px 10px; }
+  .auto-sw { min-height: 40px; font-size: 11px; }
+  #briefBtn { min-height: 50px; font-size: 13px; width: 100%; }
+
+  .gate { padding: 16px; gap: 12px; }
+  .gate h2 { font-size: 19px; }
+  .gate-n { font-size: 46px; }
+  .gate-rule { display: none; }
+  .gate-item .t { font-size: 15px; }
+  .gate-item .btn { min-height: 40px; }
+
+  /* the board: tabs, one column at a time */
+  .board-head h2 { font-size: 22px; }
+  .board-actions .btn { min-height: 40px; }
+  .board-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 2px 0 4px; }
+  .board-tabs::-webkit-scrollbar { display: none; }
+  .board-tabs button { min-width: 0; min-height: 44px; padding: 0 4px; border: 1px solid var(--line-2); border-radius: 10px; background: rgba(9,4,24,.74); color: var(--muted); font: 500 10.5px/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; display: inline-flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer; }
+  .board-tabs button b { font-weight: 500; color: var(--ink); border: 1px solid var(--line-2); border-radius: 999px; padding: 2px 7px; font-size: 10.5px; }
+  .board-tabs button[aria-selected="true"] { color: var(--ink); border-color: var(--core); background: rgba(155,109,255,.16); }
+  .board-tabs button.final[aria-selected="true"] { border-color: var(--gate); }
+  .board[data-show="planned"] .col:not(.planned), .board[data-show="working"] .col:not(.working),
+  .board[data-show="shared"] .col:not(.shared), .board[data-show="final"] .col:not(.final) { display: none; }
+  .board .col-h { display: none; }
+  .col { padding: 10px; gap: 10px; }
+  .card { padding: 12px; gap: 7px; }
+  .card .t { font-size: 15px; }
+  .card .meta { font-size: 11px; }
+  .card .prev { font-size: 13px; line-height: 1.5; }
+  .card .live { font-size: 11.5px; }
+  .card .acts .btn, .btn.small { min-height: 40px; padding: 0 14px; font-size: 11.5px; }
+}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
   .ticker-track { animation: none; }
@@ -613,6 +700,10 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
           <input type="checkbox" id="autoSw" checked>
           <span class="trk" aria-hidden="true"></span><span class="lbl">Autopilot</span>
         </label>
+        <label class="auto-sw" id="meLbl" title="Just for me: no buyer tests and no business steps (pricing, outreach, launch). The crew plans, designs and builds it for your own use. Saying 'for me' in the goal does the same.">
+          <input type="checkbox" id="meSw">
+          <span class="trk" aria-hidden="true"></span><span class="lbl">Just for me</span>
+        </label>
         <label class="auto-sw" id="webLbl" title="On: every writing step (idea, research, design, build, pricing, operations, outreach, launch) can search and read real web pages through the Claude desktop app's browser before writing. The app asks you before each new website.">
           <input type="checkbox" id="webSw" checked>
           <span class="trk" aria-hidden="true"></span><span class="lbl">Web research</span>
@@ -647,6 +738,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
         <button class="btn" type="button" data-act="add-agent">Add agent</button>
       </div>
     </div>
+    <div class="board-tabs" id="boardTabs" role="tablist" aria-label="Board columns"></div>
     <div class="board" id="board"></div>
   </section>
 
@@ -1218,7 +1310,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     cb.disabled = !!(S.auto && S.auto.cancel);
     cb.textContent = S.auto && S.auto.cancel ? "Cancelling…" : S.cancelArm ? "Confirm cancel" : "Cancel autopilot";
     // Finish now skips the buyer votes that are left. It also needs a second click, and it is only offered while votes are still being run.
-    const cg = curGoal(), canFinish = canCancel && !(cg && cg.skipTests);
+    const cg = curGoal(), canFinish = canCancel && !(cg && (cg.skipTests || cg.personal));
     if (!canFinish) S.finishArm = false;
     const fb = $("#autoFinish");
     fb.hidden = !canFinish;
@@ -1266,6 +1358,15 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
           h("summary", { text: older.length + " older version" + (older.length === 1 ? "" : "s") + " · replaced by a newer try" }),
           older.map((x) => { const a = agentById(x.agentId); return h("button", { class: "held-row", type: "button", "data-act": "review", "data-id": x.id, c: a ? a.color : null }, h("span", { class: "dot", c: a ? a.color : null }), h("span", { class: "ttl", text: x.title }), h("span", { class: "who2", text: a ? a.name : "Removed agent" })); })) : null);
     }));
+    {
+      const counts = Object.fromEntries(cols.map(([key, , test]) => [key, t.filter(test).length]));
+      const short = { planned: "Planned", working: "Working", shared: "Passed", final: "Final" };
+      let show = S.boardTab;
+      if (!show || !(show in counts)) show = counts.final ? "final" : counts.working ? "working" : counts.shared ? "shared" : "planned";
+      $("#board").dataset.show = show;
+      put($("#boardTabs"), ...cols.map(([key]) => h("button", { type: "button", role: "tab", class: key, "aria-selected": key === show ? "true" : "false", "data-act": "board-tab", "data-id": key },
+        short[key], h("b", { text: String(counts[key]) }))));
+    }
     const planned = t.filter((x) => (x.status === "planned" || x.status === "returned") && !x.pipe).length;
     const runAll = $("#runAllBtn");
     runAll.disabled = !canRun() || !planned || S.runningAll || !!S.auto;
@@ -1310,6 +1411,10 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
       return h("li", {}, h("button", { class: "rs " + st + (s.kind === "test" ? " test" : ""), type: "button", title: tip, "aria-label": tip + (st === "done" ? ", done" : st === "now" ? ", in progress" : st === "fail" ? ", did not pass yet" : st === "skip" ? ", skipped" : ", waiting"), "aria-current": st === "now" ? "step" : null, "data-act": t ? "review" : null, "data-id": t ? t.id : null },
         s.label, sub ? h("i", { text: sub }) : null));
     }));
+    if (window.matchMedia("(max-width: 600px)").matches) {
+      const now = el.querySelector(".rs.now") || [...el.querySelectorAll(".rs.done, .rs.fail, .rs.skip")].pop();
+      if (now) { const li = now.parentElement; if (el.scrollLeft > li.offsetLeft - 14 || li.offsetLeft + li.offsetWidth > el.scrollLeft + el.clientWidth) el.scrollLeft = Math.max(0, li.offsetLeft - 14); }
+    }
   }
 
   function emptyColText(key) {
@@ -1565,17 +1670,19 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
   }
   // Autopilot: the manager sets the route, then one product is handed from role to role (see the relay below).
   async function startRelay(text, mgr) {
-    const built = buildStages(text);
+    const personal = !!(($("#meSw") && $("#meSw").checked) || PERSONAL_RE.test(text));
+    const built = buildStages(text, personal);
     if (built.error) { stageStatus(built.error); return; }
     S.planning = true; scheduleRender();
     stageStatus(mgr.name + " is setting the route…");
     const goalRef = S.db.collection("goals").doc();
-    const ok = await write(() => goalRef.set({ text, createdBy: S.me, createdAt: nowIso(), status: "running", managerId: mgr.id, auto: true, mode: "pipeline", stages: built.stages }), "The goal couldn't be saved. Try again.");
+    const ok = await write(() => goalRef.set({ text, createdBy: S.me, createdAt: nowIso(), status: "running", managerId: mgr.id, auto: true, mode: "pipeline", stages: built.stages, personal: !!built.personal }), "The goal couldn't be saved. Try again.");
     S.planning = false;
     if (!ok) { stageStatus(""); scheduleRender(); return; }
     $("#goal").value = "";
     const route = built.stages.filter((s) => s.kind !== "final").map((s) => s.label).join(" > ");
-    stageStatus(mgr.name + " set the route: " + route + " > Final package. Autopilot is starting. Keep this tab open until the final package arrives.");
+    stageStatus(mgr.name + " set the route: " + route + " > Final package." + (built.personal ? " It's just for you, so there are no buyer tests." : "") + " Autopilot is starting. Keep this tab open until the final package arrives.");
+    if ($("#meSw")) $("#meSw").checked = false;
     autoRunGoal(goalRef.id, { stages: built.stages, text });
   }
 
@@ -1700,11 +1807,31 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
   const INCOMES = ["low", "lower-middle", "middle", "upper-middle", "high"];
   const roleAgent = (job) => S.agents.find((a) => jobOf(a) === job) || null;
 
-  function buildStages(text) {
+  // Just for me: no buyer tests and no business steps. The crew plans, designs and builds it for the owner's own use.
+  const PERSONAL_ASK = {
+      "concept": "The owner wants this for themselves, not to sell, so there are no buyers, prices or marketing. Turn the request into a clear brief the crew can build from: what it is and what it is for; who will use it (the owner, and anyone they mention); what it must include and what it must leave out; the look and feel they would want; and the content it needs (names, sections, text). Where the owner didn't say, make sensible choices and list them under a heading Assumptions.",
+      "research": "The owner wants this for their own use. Find what makes this kind of thing great: strong examples of similar sites or tools, the content and features people expect, and practical details to get right (hosting, domains, privacy, accessibility). No market, competitor or pricing analysis."
+  };
+  const PERSONAL_RE = /\b(?:(?:it'?s|its|this is|just|only)\s+)?for\s+(?:me|myself)\b|\bpersonal\s+(?:site|website|page|project|use|app)\b|\bmy\s+(?:portfolio|resume|cv|wedding|family|blog|personal)\b/i;
+  const isPersonal = (gid) => !!(S.goals.find((y) => y.id === gid) || {}).personal;
+  const stageAsk = (gid, key) => (isPersonal(gid) && PERSONAL_ASK[key]) || STAGE_ASK[key] || "";
+  function buildStages(text, personal) {
     const mgr = managerAgent(), tester = roleAgent("Tester");
     if (!mgr) return { error: "Add an agent with the Manager role first." };
-    if (!tester) return { error: "Add a Tester agent first. The relay needs one to run the buyer votes." };
     const mk = (key, label, agent) => ({ key, kind: "make", label, agentId: agent.id });
+    if (personal) {
+      // For the owner's own use: plan it, look up what makes it good, design it, build it, hand it over. No tests.
+      const desP = roleAgent("Designer"), resP = roleAgent("Researcher");
+      const wantsAppP = /\bapp\b|mobile|iphone|android|\bios\b|\bpwa\b/i.test(text), wantsWebP = /web\s?site|webpage|web page|landing|\bsite\b|portfolio|\bweb\b/i.test(text);
+      const bP = (wantsAppP && !wantsWebP ? roleAgent("App Builder") : roleAgent("Website Builder")) || roleAgent("Website Builder") || roleAgent("App Builder") || roleAgent("Developer");
+      const sp = [mk("concept", "Brief", roleAgent("Strategist") || mgr)];
+      if (resP) sp.push(mk("research", "Research", resP));
+      if (desP) sp.push(mk("design", "Design", desP));
+      sp.push(bP ? mk("build", "Build", bP) : mk("build", "Build plan", mgr));
+      sp.push({ key: "final", kind: "final", label: "Final package", agentId: mgr.id });
+      return { stages: sp, personal: true };
+    }
+    if (!tester) return { error: "Add a Tester agent first. The relay needs one to run the buyer votes." };
     const wantsApp = /\bapp\b|mobile|iphone|android|\bios\b|\bpwa\b/i.test(text), wantsWeb = /web\s?site|webpage|web page|landing|\bsite\b|online store|storefront|\bweb\b/i.test(text);
     const des = roleAgent("Designer");
     const builder = (wantsApp && !wantsWeb ? roleAgent("App Builder") : wantsWeb ? roleAgent("Website Builder") : null) || roleAgent("Website Builder") || roleAgent("App Builder") || roleAgent("Developer");
@@ -1789,7 +1916,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
       (ctx ? "\n\nTHE PRODUCT SO FAR. This is the crew's shared work, in order. Every step builds on the one before it, so you are adding to one product and not starting an idea of your own:" + ctx : "") +
       (hist ? "\n\nWhat the simulated buyers said so far:\n" + hist : "") +
       (amend ? "\n\nChanges the crew made after buyer tests (treat these as part of the product):\n" + amend : "") +
-      "\n\nYOUR STEP: " + s.label + ". " + (STAGE_ASK[s.key] || x.brief || "") +
+      "\n\nYOUR STEP: " + s.label + ". " + (stageAsk(x.goalId, s.key) || x.brief || "") +
       "\n\nRules: build on the concept as it stands. Use the same product name, customer, promise, price and features as the steps above. Do not invent a different idea. If something earlier is wrong or impossible, say so in a short section called Conflicts at the end instead of quietly changing it. Research notes are advice, not decisions." + revise +
       (x.status === "returned" && x.output ? "\n\nYour previous draft:\n" + clip(x.output, 6000) + "\n\nThe owner sent it back with this note:\n" + (x.note || "(no note)") + "\nRevise the draft to address the note." : "") +
       "\n\nWrite the finished deliverable now. Start with the deliverable itself, with no preamble. Use plain text with short headings and lists where they help. End with a short line starting \"Check before using:\" listing anything the owner should verify, or \"Check before using: nothing\"." +
@@ -1856,9 +1983,9 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     return "You are " + a.name + ", the " + a.role + " on a small AI crew that has just built ONE product together, one role after another.\nYour standing instructions: " + (a.instructions || ROLES[a.role] || "Do excellent work in your role.") + "\n" + skillBlock(a) + LIMITS +
       "\n\nThe owner's goal: " + (x.goalText || "(none)") +
       "\n\nTHE FINISHED STEPS, in order (each is the newest version, after any buyer-test tweaks):" + ctx +
-      "\n\nBUYER TEST RESULTS. The page counted these votes. The buyers are simulated, so the yes counts are an upper bound.\n" + (tests || "(no tests recorded)") +
+      (isPersonal(x.goalId) ? "\n\nThis is for the owner's own use, so there were no buyer tests, prices or marketing by design. Do not mention buyers, sales or pricing. Open with what was made, then how to use it, what the owner still has to fill in or decide, and how to put it online, in plain steps." : "\n\nBUYER TEST RESULTS. The page counted these votes. The buyers are simulated, so the yes counts are an upper bound.\n" + (tests || "(no tests recorded)")) +
       (qaT ? "\n\nThe Tester's quality check of the build:\n" + clip(qaT.qa, 1200) : "") + chkText + skipText +
-      "\n\nYOUR STEP: Final package. The owner gets the finished website as a working file they can open and download right next to this package, so this is the short cover note, not a set of instructions or a prompt. Keep it under 900 words. Open with two or three sentences: what was made and whether it won the buyers over. Then merge every step above into one consistent package: the concept, what it looks like, what was built (the built file is kept in the Build step, where the owner can copy it, so do not repeat the code), the price, how it runs on day one, how to win the first customers and the launch plan. Say which changes came from buyer tests. Point out any place where two steps disagree. End with the three next steps for the owner, in order. Use only what is in the steps above and never add facts, numbers or quotes." +
+      "\n\nYOUR STEP: Final package. The owner gets the finished website as a working file they can open and download right next to this package, so this is the short cover note, not a set of instructions or a prompt. Keep it under 900 words. Open with two or three sentences: what was made" + (isPersonal(x.goalId) ? "" : " and whether it won the buyers over") + ". Then merge every step above into one consistent package: the concept, what it looks like, what was built (the built file is kept in the Build step, where the owner can copy it, so do not repeat the code), the price, how it runs on day one, how to win the first customers and the launch plan. Say which changes came from buyer tests. Point out any place where two steps disagree. End with the three next steps for the owner, in order. Use only what is in the steps above and never add facts, numbers or quotes." +
       (x.status === "returned" && x.output ? "\n\nYour previous draft:\n" + clip(x.output, 6000) + "\n\nThe owner sent it back with this note:\n" + (x.note || "(no note)") + "\nRevise the draft to address the note." : "") +
       "\n\nStart with the package itself, with no preamble. Use plain text with short headings and lists. End with a section that starts with the words \"Check before using:\" followed by a numbered list of everything the owner should verify, including that the buyer votes were simulated.\nThe draft is shown as plain text, so do not use markdown symbols such as ** or #. Write headings as plain lines and lists with hyphens.";
   }
@@ -1874,7 +2001,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
         if (FINISHED(p)) ctx += "\n### " + z.label + "\n" + clip(stripCode(p.output), 1500) + "\n";
       }
     }
-    const ask = s ? STAGE_ASK[s.key] || t.brief || "" : t.brief || "(no brief)";
+    const ask = s ? stageAsk(t.goalId, s.key) || t.brief || "" : t.brief || "(no brief)";
     const job = jobOf(a);
     const designBar = (s && (s.key === "build" || s.key === "design")) || job === "Website Builder" || job === "App Builder" || job === "Designer"
       ? "\n\nThis is design work, so also judge it like a demanding art director. Send it back if any of these are true: it would look like a template or an AI draft; fonts are left at the browser default or there is no clear type scale; spacing is cramped or uneven; the hero is weak or generic; it uses lorem ipsum, fake reviews, emoji icons or a stock purple-blue gradient look; buttons and cards are inconsistent; it would break or scroll sideways on a phone; text contrast looks too low; or (for a build) it ignores the Designer's tokens. Name the exact fixes." : "";
@@ -2147,7 +2274,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
       };
       const makeData = (s, i, round, extra) => ({
         agentId: s.agentId, kind: "make", stage: s.key, step: i, round, plannedBy: round > 1 ? (stages.find((z) => z.kind === "test" && z.fix === s.key) || { agentId: mgr.id }).agentId : before(i),
-        title: s.label + (round > 1 ? " · try " + round : "") + ": " + clip(goalText, 64), brief: clip(STAGE_ASK[s.key] || "", 600), after: [], ...extra,
+        title: s.label + (round > 1 ? " · try " + round : "") + ": " + clip(goalText, 64), brief: clip(stageAsk(goalId, s.key), 600), after: [], ...extra,
       });
 
       // The manager signs each step off and hands it to the next role, so the owner never has to.
@@ -2344,7 +2471,8 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     if (done) {
       const tests = goalTasks(goalId).filter((y) => y.votes);
       const gl = S.goals.find((y) => y.id === goalId) || {};
-      if (gl.skipTests) {
+      if (gl.personal) stageStatus("Done. It's built for you, with no buyer tests. " + (siteOf(goalId) ? "Press See website on the final package to open it, or review the package to approve it." : "The final package is waiting for your OK."));
+      else if (gl.skipTests) {
         const best = Math.max(0, ...tests.map((y) => y.votes.yes));
         stageStatus("Done. You skipped the buyer votes, so this product did not win them" + (tests.length ? " (best result " + best + " of 30 yes)" : "") + ". The final package is waiting for your OK and says so.");
       } else stageStatus("Done. The product passed all 3 buyer tests (" + tests.length + " tests in all). " + (siteOf(goalId) ? "The website is built: press See website on the final package, or review the package to approve it." : "The final package is waiting for your OK."));
@@ -2990,6 +3118,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
         if (x) copyText(x.output || "", b);
         break;
       }
+      case "board-tab": S.boardTab = id; scheduleRender(); break;
       case "open-site": if ($("#reviewDlg").open) $("#reviewDlg").close(); openSite(id); break;
       case "site-size": { S.sitePhone = !S.sitePhone; const f = $("#siteBody .site-frame"); if (f) f.classList.toggle("phone", S.sitePhone); b.textContent = S.sitePhone ? "Computer size" : "Phone size"; b.setAttribute("aria-pressed", S.sitePhone ? "true" : "false"); break; }
       case "dl-site": { const site = siteOf(id); if (site) saveFile(slug(productName(id) || "website") + ".html", site.code, b); break; }

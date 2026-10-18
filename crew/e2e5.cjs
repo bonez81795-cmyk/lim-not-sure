@@ -94,7 +94,7 @@ const lights = (page) => page.evaluate(() => window.__V.flights.concat(window.__
   // ---- phone: vortex is most of the first screen
   ({ page, ctx, errors } = await open(browser, { w: 390, h: 844 }));
   const ph = await page.evaluate(() => { const v = document.querySelector('#vortex').getBoundingClientRect(); return { h: v.height, w: v.width, sx: document.documentElement.scrollWidth }; });
-  ok(ph.h >= 420 && ph.sx <= 390, 'phone: vortex ' + ph.w.toFixed(0) + 'x' + ph.h.toFixed(0) + ', no sideways scroll (' + ph.sx + ')');
+  ok(ph.h >= 300 && ph.h <= 420 && ph.sx <= 390, 'phone: vortex is a calm 300 to 420px tall, ' + 'size ' + ph.w.toFixed(0) + 'x' + ph.h.toFixed(0) + ', no sideways scroll (' + ph.sx + ')');
   ok(errors.length === 0, 'phone: no page errors ' + errors.join(';'));
   await ctx.close();
 

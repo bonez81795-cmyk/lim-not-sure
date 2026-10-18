@@ -313,6 +313,7 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok((await goal(page)).status === 'stopped', 'if you do not confirm, it goes back to normal and nothing is cancelled');
   await page.click('#autoCancel'); await page.click('#autoCancel');
   await waitStatus(page, /^Autopilot cancelled/);
+  await page.waitForFunction(() => document.querySelector('#autoResume').hidden && document.querySelector('#autoCancel').hidden, null, { timeout: 3000 }).catch(() => {});
   ok((await goal(page)).status === 'cancelled' && await page.evaluate(() => document.querySelector('#autoResume').hidden && document.querySelector('#autoCancel').hidden), 'cancelling a stopped run removes Resume for good');
   ok(!(await tasks(page)).some((t) => t.pipe && !t.output), 'its empty unfinished steps are removed');
   await ctx.close();
@@ -468,6 +469,27 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   ok(mp('Concept').toolErr.length && /isn't available right now/.test(mp('Concept').toolErr[0]) && !L.find((x) => x.kind === 'make' && x.label === 'Research').web, 'when the app\'s browser can\'t be reached, the bot is told once and the rest of the chain writes without browsing');
   await ctx.close();
 
+  // ================= just for me: no buyer tests, no business steps
+  ({ page, ctx, errors } = await open(browser));
+  await start(page, 'Make me a portfolio website, it is for me');
+  await waitStatus(page, /^Done\./, 90000);
+  L = await log(page); ts = await tasks(page);
+  const gp = await goal(page);
+  ok(gp.personal === true && gp.stages.map((z) => z.key).join(',') === 'concept,research,design,build,final', 'saying "for me" gives the route Brief > Research > Design > Build > Final package: ' + gp.stages.map((z) => z.label).join(' > '));
+  ok((await page.evaluate(() => window.__batchCalls)) === 0 && !ts.some((t) => t.kind === 'test' || t.kind === 'check'), 'no buyer votes and no tests at all');
+  ok(/for themselves, not to sell/.test(L.find((x) => x.kind === 'make' && x.label === 'Brief').prompt) && !/Twelve genuinely different ideas/.test(L.find((x) => x.kind === 'make' && x.label === 'Brief').prompt), 'the brief step plans it for your own use instead of brainstorming businesses');
+  const fpp = L.find((x) => x.kind === 'final').prompt;
+  ok(/for the owner's own use/.test(fpp) && !/BUYER TEST RESULTS/.test(fpp) && !/whether it won the buyers over/.test(fpp), 'the final package leaves out buyers and pricing');
+  ok(/It's built for you, with no buyer tests/.test(await status(page)) && (await page.evaluate(() => document.querySelector('#autoFinish').hidden)), 'the done message says so, and there is no Finish now');
+  await ctx.close();
+  ({ page, ctx, errors } = await open(browser));
+  await page.check('#meSw');
+  await start(page, 'Launch a website for a bakery');
+  await waitStatus(page, /^Done\./, 90000);
+  ok((await goal(page)).personal === true && (await page.evaluate(() => window.__batchCalls)) === 0 && !(await page.isChecked('#meSw')), 'the Just for me switch does the same without the words, and resets after starting');
+  ok(errors.length === 0, 'no page errors in personal mode' + (errors.length ? ': ' + errors.join(' | ') : ''));
+  await ctx.close();
+
   // ================= the manager sends a step back: it is fixed once and passed on, and you never see it
   ({ page, ctx, errors } = await open(browser));
   await page.evaluate(() => { window.__mgr = { Design: { n: 1 } }; });
@@ -520,6 +542,11 @@ const seq = (l) => l.filter((x) => x.kind === 'make' || x.kind === 'final').map(
   await page.screenshot({ path: 'shot-relay-phone.png' });
   await waitStatus(page, /^Done\./);
   ok((await page.evaluate(() => document.documentElement.scrollWidth)) <= 376, 'and none after a run');
+  ok(await page.evaluate(() => { const b = document.querySelector('#board'); const vis = [...b.querySelectorAll('.col')].filter((c) => getComputedStyle(c).display !== 'none'); return !!document.querySelector('#boardTabs button') && getComputedStyle(document.querySelector('#boardTabs')).display !== 'none' && vis.length === 1 && vis[0].classList.contains('final'); }), 'on a phone the board shows one column at a time, opening on Final once the package exists');
+  await page.click('#boardTabs button.shared');
+  await page.waitForFunction(() => document.querySelector('#board').dataset.show === 'shared', null, { timeout: 3000 }).catch(() => {});
+  ok(await page.evaluate(() => { const vis = [...document.querySelectorAll('#board .col')].filter((c) => getComputedStyle(c).display !== 'none'); return vis.length === 1 && vis[0].classList.contains('shared') && document.querySelector('#boardTabs button.shared').getAttribute('aria-selected') === 'true'; }), 'tapping a board tab switches the column');
+  ok(await page.evaluate(() => getComputedStyle(document.querySelector('#goal')).fontSize === '16px' && [...document.querySelectorAll('.vbtns .btn, #boardTabs button, #briefBtn')].filter((e) => e.offsetParent).every((e) => e.getBoundingClientRect().height >= 40)), 'the goal box uses 16px text (no iPhone zoom) and the main buttons are finger-sized');
   await ctx.close();
 
   // ================= reduced motion
