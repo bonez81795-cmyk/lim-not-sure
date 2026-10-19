@@ -668,9 +668,9 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
         </div>
         <div class="node-card" id="nodeCard" aria-hidden="true" hidden></div>
         <div class="stage-empty" id="stageEmpty" hidden>
-          <h2>No agents yet</h2>
-          <p>Add a manager first. The manager turns your goals into tasks and hands them to the rest of the crew.</p>
-          <p><button class="btn primary" type="button" data-act="add-agent">Add your first agent</button></p>
+          <h2>Setting up your crew</h2>
+          <p>Crew Control comes with 12 ready-made agents, from the Manager to the Website Builder. They install themselves the first time the page opens.</p>
+          <p><button class="btn primary" type="button" data-act="install-crew">Install the full crew</button> <button class="btn" type="button" data-act="add-agent">Add one agent</button></p>
         </div>
       </div>
       <p class="stage-status" id="stageStatus" aria-live="polite"></p>
@@ -988,6 +988,31 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     [/sale|outreach|support|account|success/i, "Sales"],
   ];
   const DEFAULT_TUNING = { temperature: 0.7, max_tokens: 4096, tier: "default" };
+  // The crew that ships with the page. Fixed ids make installing safe to repeat: two people opening an empty crew
+  // at the same moment write the same 12 documents instead of 24.
+  const STARTER_CREW = [
+    ["ag-manager", "Manager", "Manager", "#ff6b6b"], ["ag-strategist", "Strategist", "Strategist", "#ffd23f"],
+    ["ag-researcher", "Researcher", "Researcher", "#ff5fa2"], ["ag-designer", "Designer", "Designer", "#3ddc97"],
+    ["ag-web", "Web Builder", "Website Builder", "#ff5fa2"], ["ag-app", "App Builder", "App Builder", "#a78bfa"],
+    ["ag-dev", "Developer", "Developer", "#ff6b6b"], ["ag-marketer", "Marketer", "Marketer", "#a78bfa"],
+    ["ag-sales", "Sales", "Sales", "#ff8a3d"], ["ag-finance", "Finance", "Finance", "#5aa9ff"],
+    ["ag-ops", "Operations", "Operations", "#22d3ee"], ["ag-tester", "Tester", "Tester", "#3ddc97"],
+  ];
+  async function installCrew(onlyMissing) {
+    if (!canAct()) return false;
+    const have = new Set(S.agents.map((a) => jobOf(a) || a.role));
+    const at = nowIso();
+    const todo = STARTER_CREW.filter(([, , role]) => !onlyMissing || !have.has(role));
+    if (!todo.length) { stageStatus("Every role is already on the crew."); return true; }
+    stageStatus("Installing " + todo.length + " agents...");
+    let ok = true;
+    for (const [id, name, role, color] of todo) {
+      const done = await write(() => S.db.doc("agents/" + id).set({ name, role, engine: "claude", instructions: ROLES[role] || "", color, createdBy: S.me, createdAt: at, updatedAt: at, starter: true }), "Some agents couldn't be installed. Tap Install the full crew to try again.");
+      if (!done) { ok = false; break; }
+    }
+    if (ok) stageStatus("Your crew of " + STARTER_CREW.length + " is ready. Type a goal to start.");
+    return ok;
+  }
   function jobOf(a) {
     const role = (a && a.role) || "";
     if (TUNING[role]) return role;
@@ -3071,6 +3096,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
       case "close": b.closest("dialog").close(); break;
       case "dismiss-notice": notice(""); break;
       case "add-agent": if (canAct()) openAgentForm(null); break;
+      case "install-crew": installCrew(true); break;
       case "edit-agent": $("#drawerDlg").close(); openAgentForm(id); break;
       case "open-agent": openDrawer(id); break;
       case "review": if ($("#drawerDlg").open) $("#drawerDlg").close(); openReview(id); break;
@@ -3913,7 +3939,7 @@ dialog::backdrop { background: rgba(1,0,6,.8); backdrop-filter: blur(3px); }
     if (!db) { S.noDb = true; notice("Sign in to claude.ai to see and work with the crew."); renderAll(); return; }
     if (!sample) S.sampleOff = true;
     const onErr = (e) => { if (e && e.code !== "revoked") notice("The crew stopped updating. Reload the page to reconnect."); };
-    db.collection("agents").orderBy("createdAt").limit(24).onSnapshot((s) => { S.agents = s.docs.map((d) => ({ id: d.id, ...d.data() })); updateAgentSelectors(); scheduleRender(); }, onErr);
+    db.collection("agents").orderBy("createdAt").limit(24).onSnapshot((s) => { S.agents = s.docs.map((d) => ({ id: d.id, ...d.data() })); updateAgentSelectors(); scheduleRender(); if (!S.crewChecked) { S.crewChecked = true; if (!S.agents.length && canAct()) installCrew(false); } }, onErr);
     db.collection("goals").orderBy("createdAt", "desc").limit(20).onSnapshot((s) => { S.goals = s.docs.map((d) => ({ id: d.id, ...d.data() })); scheduleRender(); }, () => {});
     db.collection("tasks").orderBy("createdAt", "desc").limit(300).onSnapshot((s) => { S.tasks = s.docs.map((d) => ({ id: d.id, ...d.data() })); try { noteTasks(S.tasks); } catch { /* the lights are decoration */ } scheduleRender(); }, onErr);
     try {
